@@ -40,6 +40,10 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
   
+  // Define dinamicamente o mês em que o site está (Ex: "2026-03")
+  const dataAtual = new Date();
+  const mesAtualStr = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}`;
+
   const getCashback = (cargo: string) => { 
     const r: any = { 'Resp.Vendas': 0.15, 'Master AFL': 0.12, 'Resp.AFL': 0.10, 'Auxiliar AFL': 0.09, 'Lider AFL': 0.08, 'Sub-Lider AFL': 0.07, 'Membro AFL': 0.06 };
     return r[cargo] || 0.06;
@@ -74,13 +78,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     const auditTimer = setInterval(autoAudit, 60000); 
     return () => clearInterval(auditTimer);
   }, [isAdmin]);
-
-  useEffect(() => {
-    if (membroSelecionado) {
-       const atualizado = equipe.find((m: any) => String(m.discordId) === String(membroSelecionado.discordId));
-       if (atualizado && JSON.stringify(atualizado) !== JSON.stringify(membroSelecionado)) setMembroSelecionado(atualizado);
-    }
-  }, [equipe, membroSelecionado]);
 
   useEffect(() => {
     if (registros.length > 0 && !mesBackup) {
@@ -158,22 +155,75 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     setLoading(false);
   };
 
+  // --- FILTROS DE TELA (FOCADOS NO MÊS ATUAL) ---
+  
+  // Bruto: Pega as vendas do mês atual (ignorando dívida herdada)
+  const getProducaoBruta = (discordId: string) => {
+    return registros
+      .filter(r => 
+        String(r.discordId || r.vendedorId) === String(discordId) && 
+        (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
+        (r.tipo === 'VENDA' || !r.tipo) && 
+        !(r.item || '').includes('[Dívida Antiga]') && 
+        !(r.item || '').includes('Saldo Retido') &&
+        r.criado_em && r.criado_em.startsWith(mesAtualStr)
+      )
+      .reduce((a, r) => a + (Number(r.valor) || 0), 0);
+  };
+
+  // Líquido: Dinheiro vivo que a empresa recebeu desse vendedor no mês atual
+  const getLiquidoMembro = (discordId: string) => {
+    return registros
+      .filter(r => 
+        String(r.discordId || r.vendedorId) === String(discordId) && 
+        (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
+        (r.tipo === 'VENDA' || !r.tipo) && 
+        !(r.item || '').includes('Saldo Retido') &&
+        r.criado_em && r.criado_em.startsWith(mesAtualStr)
+      )
+      .reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
+  };
+
   const pendencias = registros.filter(r => r.status === 'APROVADO' && (r.tipo === 'VENDA' || !r.tipo) && Number(r.valorRecebido) < Number(r.valor));
   const aguardando = registros.filter(r => r.status === 'PENDENTE');
-  const equipeOrdenada = [...equipe].sort((a, b) => b.vendas - a.vendas);
+  
+  // Organiza a equipe aplicando os cálculos do Front-End
+  const equipeOrdenada = [...equipe].map(m => ({ 
+      ...m, 
+      producaoReal: getProducaoBruta(m.discordId),
+      liquidoReal: getLiquidoMembro(m.discordId)
+  })).sort((a, b) => b.producaoReal - a.producaoReal);
+  
   const equipeFiltrada = selectedCargo === 'Todos' ? equipeOrdenada : equipeOrdenada.filter(m => m.cargoPainel === selectedCargo);
   
+  // Atualiza o membro selecionado no modal para refletir os números reais
+  useEffect(() => {
+    if (membroSelecionado) {
+       const atualizado = equipeOrdenada.find((m: any) => String(m.discordId) === String(membroSelecionado.discordId));
+       if (atualizado && JSON.stringify(atualizado) !== JSON.stringify(membroSelecionado)) setMembroSelecionado(atualizado);
+    }
+  }, [equipeOrdenada, membroSelecionado]);
+
+  // Histórico do Extrato do Membro (Só do Mês Atual)
   const historicoMembro = membroSelecionado ? registros.filter(r => 
     String(r.discordId || r.vendedorId) === String(membroSelecionado.discordId) && 
-    r.status === 'APROVADO'
+    (r.status === 'APROVADO' || r.status === 'ARQUIVADO') &&
+    r.criado_em && r.criado_em.startsWith(mesAtualStr) &&
+    !(r.item || '').includes('Saldo Retido')
   ).sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime()) : [];
 
-  // --- CÁLCULOS DO DASHBOARD (MATEMÁTICA CORRIGIDA) ---
-  const totalBruto = equipe.reduce((a, m) => a + (Number(m.vendas) || 0), 0);
-  
-  // O Líquido agora reflete EXATAMENTE o que foi recebido, sem descontar dívidas passadas da equipe.
-  const totalLiquido = equipe.reduce((a, m) => a + (Number(m.valorRecebido) || 0), 0);
+  // MURAL PÚBLICO (Geral do Mês Atual)
+  const registrosMural = registros.filter(r => 
+    (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
+    r.criado_em && r.criado_em.startsWith(mesAtualStr) &&
+    !(r.item || '').includes('Saldo Retido')
+  ).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
 
+  // DASHBOARD TOTAIS
+  const totalBruto = equipeOrdenada.reduce((a, m) => a + m.producaoReal, 0);
+  const totalLiquido = equipeOrdenada.reduce((a, m) => a + m.liquidoReal, 0);
+
+  // BACKUP MENSAL (Filtro Antigo)
   const mesesDisponiveis = Array.from(new Set(registros.map(r => {
     const d = new Date(r.criado_em);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -247,8 +297,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
         {activeTab === 'inicio' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4">
-             <StatCard title="VALOR BRUTO" value={totalBruto} icon={<TrendingUp size={32}/>} type="money" />
-             <StatCard title="VALOR LÍQUIDO (RECEBIDO)" value={totalLiquido} icon={<Zap size={32}/>} type="money" highlight />
+             <StatCard title="VALOR BRUTO (MÊS ATUAL)" value={totalBruto} icon={<TrendingUp size={32}/>} type="money" />
+             <StatCard title="VALOR LÍQUIDO (CAIXA DO MÊS)" value={totalLiquido} icon={<Zap size={32}/>} type="money" highlight />
              <StatCard title="MEMBROS ATIVOS" value={equipe.length} icon={<Users size={32}/>} />
           </div>
         )}
@@ -257,14 +307,14 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
           <div className="bg-[#0a0a0a] border border-white/5 rounded-[3rem] overflow-hidden shadow-2xl animate-in fade-in">
              <table className="w-full text-left font-black uppercase">
                <thead className="bg-yellow-400 text-black text-[10px] tracking-[0.2em]">
-                 <tr><th className="px-10 py-6">RANK</th><th className="px-10 py-6 text-center">AGENTE</th><th className="px-10 py-6 text-right">PRODUÇÃO BRUTA</th></tr>
+                 <tr><th className="px-10 py-6">RANK</th><th className="px-10 py-6 text-center">AGENTE</th><th className="px-10 py-6 text-right">PRODUÇÃO BRUTA (MÊS)</th></tr>
                </thead>
                <tbody className="divide-y divide-white/5">
                  {equipeOrdenada.map((m, i) => (
                    <tr key={m.discordId} className="hover:bg-white/[0.02] transition-all">
                      <td className="px-10 py-8 italic text-3xl text-zinc-700">{i + 1}º</td>
                      <td className="px-10 py-8 flex items-center justify-center gap-6 text-lg italic text-white"><img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000`} className="w-12 h-12 rounded-xl" alt=""/> {m.nome}</td>
-                     <td className="px-10 py-8 text-right text-yellow-400 text-3xl font-mono italic">R$ {formatMoney(m.vendas)}</td>
+                     <td className="px-10 py-8 text-right text-yellow-400 text-3xl font-mono italic">R$ {formatMoney(m.producaoReal)}</td>
                    </tr>
                  ))}
                </tbody>
@@ -279,15 +329,16 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                   <button key={c} onClick={() => setSelectedCargo(c)} className={`px-6 py-3 rounded-full text-[10px] font-black tracking-widest uppercase transition-all whitespace-nowrap ${selectedCargo === c ? 'bg-yellow-400 text-black shadow-lg shadow-yellow-400/20' : 'bg-[#0a0a0a] text-zinc-500 border border-white/5 hover:text-white'}`}>{c}</button>
                 ))}
              </div>
-             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {equipeFiltrada.map(m => (
                   <div key={m.discordId} onClick={() => setMembroSelecionado(m)} className="bg-[#0a0a0a] p-8 rounded-[2.5rem] border border-white/5 hover:border-yellow-400/50 transition-all cursor-pointer group shadow-xl">
                     <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000`} className="w-16 h-16 rounded-[1.5rem] mb-6 border-2 border-zinc-800 group-hover:border-yellow-400 transition-colors" alt="" />
                     <h4 className="font-black uppercase text-white text-xl mb-1 truncate">{m.nome}</h4>
                     <p className="text-[10px] text-yellow-400 font-bold mb-6 italic tracking-widest uppercase">{m.cargoPainel}</p>
                     <div className="pt-6 border-t border-white/5 space-y-3 text-[10px] font-black uppercase tracking-widest">
-                       <div className="flex justify-between text-zinc-500"><span>PRODUÇÃO:</span><span className="text-white font-mono">R$ {formatMoney(m.vendas)}</span></div>
-                       <div className="flex justify-between text-yellow-400 italic bg-yellow-400/5 p-3 rounded-xl border border-yellow-400/10"><span>A RECEBER:</span><span className="font-mono text-sm">R$ {formatMoney(calcAReceber(m))}</span></div>
+                       <div className="flex justify-between text-zinc-500"><span>BRUTO (MÊS):</span><span className="text-white font-mono">R$ {formatMoney(m.producaoReal)}</span></div>
+                       <div className="flex justify-between text-green-500/80"><span>LÍQUIDO (CAIXA):</span><span className="text-green-400 font-mono">R$ {formatMoney(m.liquidoReal)}</span></div>
+                       <div className="flex justify-between text-yellow-400 italic bg-yellow-400/5 p-3 rounded-xl border border-yellow-400/10 mt-1"><span>A RECEBER:</span><span className="font-mono text-sm">R$ {formatMoney(calcAReceber(m))}</span></div>
                     </div>
                   </div>
                 ))}
@@ -504,7 +555,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                      <tr><th className="px-8 py-6">MEMBRO / VENDEDOR</th><th className="px-8 py-6">TIPO</th><th className="px-8 py-6">CLIENTE / ID</th><th className="px-8 py-6">VALOR TOTAL</th><th className="px-8 py-6">DATA</th></tr>
                    </thead>
                    <tbody className="divide-y divide-white/5">
-                     {registros.filter(r => r.status === 'APROVADO').map((r: any) => (
+                     {registrosMural.map((r: any) => (
                        <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
                          <td className="px-8 py-6 text-white text-xs">{r.nome || r.nomeVendedor}</td>
                          <td className="px-8 py-6 text-zinc-500">{r.tipo || 'VENDA'}</td>
@@ -527,17 +578,29 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
               <div className="p-12 border-b border-white/5 flex justify-between items-start bg-gradient-to-br from-yellow-400/5 to-transparent relative">
                  <button onClick={() => setMembroSelecionado(null)} className="absolute top-10 right-10 text-zinc-600 hover:text-yellow-400 bg-black p-3 rounded-full border border-white/5"><X size={24}/></button>
                  <div className="flex items-center gap-8 w-full pr-16">
-                    <img src={membroSelecionado.avatar || `https://ui-avatars.com/api/?name=${membroSelecionado.nome}&background=EAB308&color=000`} className="w-32 h-32 rounded-[2.5rem] border-2 border-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.2)]" alt="" />
+                    <img src={membroSelecionado.avatar || `https://ui-avatars.com/api/?name=${membroSelecionado.nome}&background=EAB308&color=000`} className="w-24 h-24 sm:w-32 sm:h-32 rounded-[2.5rem] border-2 border-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.2)]" alt="" />
                     <div className="flex-1 min-w-0">
-                       <h2 className="text-4xl sm:text-5xl font-black uppercase italic tracking-tighter text-white leading-none truncate">{membroSelecionado.nome}</h2>
+                       <h2 className="text-3xl sm:text-4xl font-black uppercase italic tracking-tighter text-white leading-none truncate">{membroSelecionado.nome}</h2>
                        <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-[10px] mt-4 bg-yellow-400/10 inline-block px-4 py-1.5 rounded-full">{membroSelecionado.cargoPainel}</p>
                     </div>
                  </div>
               </div>
               <div className="p-12 overflow-y-auto flex-1 grid grid-cols-1 lg:grid-cols-2 gap-12">
                  <div className="space-y-6">
-                    <div className="bg-[#0a0a0a] border border-white/5 p-10 rounded-[3rem]"><p className="text-[10px] text-zinc-600 font-black uppercase mb-3 tracking-widest">Produção Bruta (Mês)</p><p className="text-5xl font-mono italic text-white font-black">R$ {formatMoney(membroSelecionado.vendas)}</p></div>
-                    <div className="bg-green-500/5 border border-green-500/20 p-10 rounded-[3rem] shadow-[0_0_30px_rgba(34,197,94,0.05)]"><p className="text-[10px] text-green-500 font-black uppercase mb-3 tracking-widest">Saldo a Receber</p><p className="text-5xl font-mono italic text-green-400 font-black">R$ {formatMoney(calcAReceber(membroSelecionado))}</p></div>
+                    <div className="grid grid-cols-2 gap-6">
+                       <div className="bg-[#0a0a0a] border border-white/5 p-8 rounded-[2.5rem]">
+                          <p className="text-[10px] text-zinc-600 font-black uppercase mb-3 tracking-widest">Produção (Mês)</p>
+                          <p className="text-3xl font-mono italic text-white font-black">R$ {formatMoney(membroSelecionado.producaoReal)}</p>
+                       </div>
+                       <div className="bg-[#0a0a0a] border border-white/5 p-8 rounded-[2.5rem]">
+                          <p className="text-[10px] text-zinc-600 font-black uppercase mb-3 tracking-widest">Líquido (Caixa)</p>
+                          <p className="text-3xl font-mono italic text-green-400 font-black">R$ {formatMoney(membroSelecionado.liquidoReal)}</p>
+                       </div>
+                    </div>
+                    <div className="bg-green-500/5 border border-green-500/20 p-10 rounded-[3rem] shadow-[0_0_30px_rgba(34,197,94,0.05)]">
+                       <p className="text-[10px] text-green-500 font-black uppercase mb-3 tracking-widest">Saldo a Receber</p>
+                       <p className="text-5xl font-mono italic text-green-400 font-black">R$ {formatMoney(calcAReceber(membroSelecionado))}</p>
+                    </div>
                     <div className="grid grid-cols-2 gap-6">
                       <div className="bg-blue-500/5 border border-blue-500/10 p-6 rounded-[2rem]"><p className="text-[9px] font-black text-blue-500 mb-1 uppercase tracking-widest">Corridinhas</p><p className="text-2xl font-mono text-blue-400">+R$ {formatMoney(membroSelecionado.cashbackExtra)}</p></div>
                       <div className="bg-red-500/5 border border-red-500/10 p-6 rounded-[2rem]"><p className="text-[9px] font-black text-red-500 mb-1 uppercase tracking-widest">Já Pago</p><p className="text-2xl font-mono text-red-400">-R$ {formatMoney(membroSelecionado.cashbackPago)}</p></div>
