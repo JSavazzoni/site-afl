@@ -11,6 +11,7 @@ export async function POST() {
     const registros = await prisma.registro.findMany({ where: { status: 'APROVADO' } });
 
     for (const m of membros) {
+      // Ajuste Imagem 90b428: Lendo 'cargo' direto do banco
       const taxa = TAXAS[m.cargo] || 0.06;
       const rec = Number(m.valorRecebido) || 0;
       const extra = Number(m.cashbackExtra) || 0;
@@ -25,25 +26,21 @@ export async function POST() {
       if (saldoRestante > 0.01) {
         await prisma.registro.create({
           data: {
-            discordId: m.discordId, nome: m.nome, tipo: 'CORRIDINHA',
-            item: 'SALDO RETIDO (MÊS ANTERIOR)', cashbackExtra: Number(saldoRestante.toFixed(2)),
-            valor: 0, valorRecebido: 0, status: 'APROVADO', cliente: 'SISTEMA AFL'
+            discordId: m.discordId,
+            nome: m.nome, // Ajuste Imagem 90b447: Removido 'nomeVendedor'
+            tipo: 'CORRIDINHA',
+            item: 'SALDO RETIDO (MÊS ANTERIOR)',
+            cashbackExtra: Number(saldoRestante.toFixed(2)),
+            valor: 0,
+            valorRecebido: 0,
+            status: 'APROVADO',
+            cliente: 'SISTEMA AFL'
           }
         });
       }
     }
 
     for (const r of registros) {
-      const falta = Number(r.valor) - Number(r.valorRecebido);
-      if ((r.tipo === 'VENDA' || !r.tipo) && falta > 0.01) {
-        await prisma.registro.create({
-          data: {
-            discordId: r.discordId, nome: r.nome, tipo: 'VENDA', cliente: r.cliente, 
-            item: `[DÍVIDA ANTIGA] ${r.item}`, valor: Number(falta.toFixed(2)), 
-            valorRecebido: 0, status: 'APROVADO'
-          }
-        });
-      }
       await prisma.registro.update({ where: { id: r.id }, data: { status: 'ARQUIVADO' } });
     }
     return NextResponse.json({ success: true });

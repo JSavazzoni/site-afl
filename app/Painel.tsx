@@ -7,8 +7,9 @@ import {
 } from 'lucide-react';
 import { signOut } from "next-auth/react";
 
-// --- CONFIGURAÇÕES GLOBAIS ---
+// --- CONFIGURAÇÕES E AUXILIARES ---
 const HIERARQUIA = ["Resp.Vendas", "Master AFL", "Resp.AFL", "Auxiliar AFL", "Lider AFL", "Sub-Lider AFL", "Membro AFL"];
+
 const formatMoney = (val: any) => Number(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const formatMes = (yyyyMM: string) => {
@@ -42,6 +43,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
   
+  // Data de referência do sistema (Mês Atual)
   const dataAtual = new Date();
   const mesAtualStr = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}`;
 
@@ -50,7 +52,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     return r[cargo] || 0.06;
   };
 
-  // --- MATEMÁTICA FINANCEIRA REAL ---
+  // --- MATEMÁTICA DO SALDO (SOMA TUDO) ---
   const calcAReceber = (m: any) => {
     const perc = getCashback(m.cargo);
     const recebido = Number(m.valorRecebido) || 0;
@@ -59,6 +61,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     return (recebido * perc) + extra - pago;
   };
 
+  // --- SINCRONIZAÇÃO (PULSE) ---
   const pulse = useCallback(async () => {
     const v = Date.now(); 
     try {
@@ -78,72 +81,13 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   }, [pulse]);
 
   useEffect(() => {
-    if (!isAdmin) return;
-    fetch('/api/admin/auditoria?fix=true').catch(() => null);
-  }, [isAdmin]);
-
-  useEffect(() => {
     if (registros.length > 0 && !mesBackup) {
       const d = new Date(registros[0].criado_em);
       setMesBackup(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
   }, [registros, mesBackup]);
 
-  // --- AÇÕES ---
-  const handleEnviar = async (e: any) => {
-    e.preventDefault();
-    setLoading(true);
-    const valLimpo = parseFloat(form.valor.replace(',', '.')) || 0;
-    const recLimpo = form.valorRecebido ? parseFloat(form.valorRecebido.replace(',', '.')) : valLimpo;
-    const m = equipe.find((m: any) => String(m.discordId) === String(form.vendedorId || form.membroSaqueId));
-
-    const payload = { 
-      ...form, 
-      valorNumerico: form.tipo === 'CORRIDINHA' ? 0 : valLimpo,
-      recebidoNumerico: form.tipo === 'CORRIDINHA' ? 0 : recLimpo,
-      cashbackExtra: form.tipo === 'CORRIDINHA' ? valLimpo : 0,
-      vendedorNome: m?.nome 
-    };
-
-    const res = await fetch('/api/registros', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (res.ok) {
-      setForm({ tipo: 'VENDA', vendedorId: '', cliente: '', cpfEmail: '', item: '', valor: '', valorRecebido: '', pagamento: '', idDiscordAvancado: '', recrutadoId: '', quantidade: '1', membroSaqueId: '', dataVencimento: '' });
-      showToast("POSTADO! AGUARDE APROVAÇÃO.");
-      pulse();
-    }
-    setLoading(false);
-  };
-
-  const decidir = async (id: string, acao: 'APROVAR' | 'REPROVAR') => {
-    const res = await fetch('/api/registros/analise', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registroId: id, acao }) });
-    if (res.ok) { showToast(acao === 'APROVAR' ? "APROVADO!" : "REPROVADO!"); pulse(); }
-  };
-
-  const deletarLog = async (id: string) => {
-    if (!confirm("ATENÇÃO ADMIN: Deletar registro permanente?")) return;
-    await fetch('/api/admin/logs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-    pulse();
-  };
-
-  const virarMes = async () => {
-    if (!confirm("AVISO: Isso irá arquivar o mês atual e zerar as produções. Continuar?")) return;
-    setLoading(true);
-    await fetch('/api/admin/virada', { method: 'POST' });
-    showToast("MÊS FECHADO COM SUCESSO!");
-    pulse();
-    setLoading(false);
-  };
-
-  const handlePagarParcela = async (e: any) => {
-    e.preventDefault();
-    setLoading(true);
-    const v = parseFloat(valorParcela.replace(',', '.')) || 0;
-    await fetch('/api/registros/parcela', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registroId: modalParcela.id, valorPago: v, proximaData: proximoVencimento }) });
-    setModalParcela(null); setValorParcela(''); pulse();
-    setLoading(false);
-  };
-
-  // --- PROCESSAMENTO DE DADOS (FILTROS) ---
+  // --- LÓGICA DE FILTRAGEM E PROCESSAMENTO ---
   const equipeProcessada = equipe.map(m => {
     const regsMês = registros.filter(r => 
         String(r.discordId) === String(m.discordId) && 
@@ -159,6 +103,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         .filter(r => (r.tipo === 'VENDA' || !r.tipo))
         .reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
 
+    // Soma as corridinhas mas ESCONDE o Saldo Retido da contagem visual de "Bônus"
     const corridinhas = regsMês
         .filter(r => r.tipo === 'CORRIDINHA' && !(r.item || '').toUpperCase().includes('SALDO RETIDO'))
         .reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
@@ -181,24 +126,80 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')
   ).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
 
-  // Lógica Backup Histórico
+  // Lógica de Backup
   const mesesDisponiveis = Array.from(new Set(registros.map(r => r.criado_em?.substring(0, 7)))).filter(Boolean).sort().reverse();
   const registrosDoMesBackup = registros.filter(r => r.criado_em?.startsWith(mesBackup));
   const backupBruto = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+Number(r.valor), 0);
   const backupLiquido = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+Number(r.valorRecebido), 0);
 
+  // --- FUNÇÕES DE COMANDO ---
+  const handleEnviar = async (e: any) => {
+    e.preventDefault();
+    setLoading(true);
+    const valLimpo = parseFloat(form.valor.replace(',', '.')) || 0;
+    const recLimpo = form.valorRecebido ? parseFloat(form.valorRecebido.replace(',', '.')) : valLimpo;
+    const m = equipe.find((m: any) => String(m.discordId) === String(form.vendedorId || form.membroSaqueId));
+
+    const payload = { 
+      ...form, 
+      valorNumerico: form.tipo === 'CORRIDINHA' ? 0 : valLimpo,
+      recebidoNumerico: form.tipo === 'CORRIDINHA' ? 0 : recLimpo,
+      cashbackExtra: form.tipo === 'CORRIDINHA' ? valLimpo : 0,
+      vendedorNome: m?.nome 
+    };
+
+    const res = await fetch('/api/registros', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (res.ok) {
+      setForm({ tipo: 'VENDA', vendedorId: '', cliente: '', cpfEmail: '', item: '', valor: '', valorRecebido: '', pagamento: '', idDiscordAvancado: '', recrutadoId: '', quantidade: '1', membroSaqueId: '', dataVencimento: '' });
+      showToast("REGISTRO ENVIADO COM SUCESSO!");
+      pulse();
+    }
+    setLoading(false);
+  };
+
+  const decidir = async (id: string, acao: 'APROVAR' | 'REPROVAR') => {
+    const res = await fetch('/api/registros/analise', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registroId: id, acao }) });
+    if (res.ok) { showToast(acao === 'APROVAR' ? "APROVADO!" : "REPROVADO!"); pulse(); }
+  };
+
+  const deletarLog = async (id: string) => {
+    if (!confirm("ATENÇÃO: Deletar registro permanente?")) return;
+    await fetch('/api/admin/logs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    pulse();
+  };
+
+  const virarMes = async () => {
+    if (!confirm("Isso irá ARQUIVAR o mês e ZERAR as produções. Continuar?")) return;
+    setLoading(true);
+    await fetch('/api/admin/virada', { method: 'POST' });
+    showToast("MÊS VIRADO!");
+    pulse();
+    setLoading(false);
+  };
+
+  const handlePagarParcela = async (e: any) => {
+    e.preventDefault();
+    setLoading(true);
+    const v = parseFloat(valorParcela.replace(',', '.')) || 0;
+    await fetch('/api/registros/parcela', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registroId: modalParcela.id, valorPago: v, proximaData: proximoVencimento }) });
+    setModalParcela(null); setValorParcela(''); pulse();
+    setLoading(false);
+  };
+
+  // --- RENDERIZAÇÃO ---
   return (
     <div className="flex min-h-screen bg-[#050505] text-white font-sans selection:bg-yellow-400 overflow-hidden">
-      {/* Toast Notificação */}
+      
+      {/* TOAST */}
       {toast && (
         <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-10">
-          <div className="bg-yellow-400 text-black px-8 py-4 rounded-2xl font-black shadow-2xl flex items-center gap-3 text-[10px] uppercase tracking-widest italic border-4 border-black/10">
+          <div className="bg-yellow-400 text-black px-8 py-4 rounded-2xl font-black shadow-2xl flex items-center gap-3 text-[10px] uppercase tracking-widest border-4 border-black/10 italic">
             <CheckCircle2 size={18} /> {toast}
           </div>
         </div>
       )}
 
-      {/* Menu Lateral */}
+      {/* SIDEBAR */}
       <aside className="w-64 border-r border-white/5 bg-[#0a0a0a] p-6 flex flex-col z-50">
         <div className="flex items-center gap-3 mb-10 font-black italic text-2xl uppercase tracking-tighter">
           <div className="p-2 bg-yellow-400 rounded-xl text-black shadow-[0_0_20px_#facc15]"><UsersRound size={24}/></div>
@@ -213,11 +214,11 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
           {isAdmin && (
             <div className="pt-6 mt-6 border-t border-white/5 space-y-2">
               <NavItem label="POSTAR" icon={<PlusCircle size={18}/>} active={activeTab === 'registrar'} onClick={() => setActiveTab('registrar')} color="text-yellow-400" />
-              <button onClick={() => setActiveTab('pendencias')} className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all ${activeTab === 'pendencias' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20' : 'text-zinc-500 hover:text-white'}`}>
+              <button onClick={() => setActiveTab('pendencias')} className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all ${activeTab === 'pendencias' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
                 <div className="flex items-center gap-4"><Clock size={18}/> <span className="font-black text-[10px] tracking-widest uppercase">PENDÊNCIAS</span></div>
                 {pendencias.length > 0 && <span className="bg-red-600 text-white text-[9px] px-2 py-0.5 rounded-full">{pendencias.length}</span>}
               </button>
-              <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all ${activeTab === 'admin' ? 'bg-yellow-400/10 text-yellow-400' : 'text-zinc-500 hover:text-white'}`}>
+              <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all ${activeTab === 'admin' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
                 <div className="flex items-center gap-4"><ShieldCheck size={18}/> <span className="font-black text-[10px] tracking-widest uppercase text-yellow-400">APROVAÇÕES</span></div>
                 {aguardando.length > 0 && <span className="bg-yellow-400 text-black text-[9px] font-black px-2 py-0.5 rounded-full">{aguardando.length}</span>}
               </button>
@@ -226,11 +227,11 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             </div>
           )}
         </nav>
-        <button onClick={() => signOut()} className="p-5 mt-4 text-zinc-600 font-black text-[10px] uppercase hover:text-red-500 transition-all flex items-center justify-center gap-4 border border-white/5 bg-black rounded-2xl"><LogOut size={16}/> DESCONECTAR</button>
+        <button onClick={() => signOut()} className="p-5 mt-4 text-zinc-600 font-black text-[10px] uppercase hover:text-red-500 border border-white/5 bg-black rounded-2xl flex justify-center gap-4 w-full"><LogOut size={16}/> DESCONECTAR</button>
       </aside>
 
+      {/* CONTEÚDO PRINCIPAL */}
       <main className="flex-1 p-12 overflow-y-auto bg-[#050505] relative">
-        {/* Header Principal */}
         <header className="mb-16 flex justify-between items-end border-b border-white/5 pb-8">
           <div>
             <h2 className="text-6xl font-black uppercase italic tracking-tighter leading-none text-white">
@@ -241,13 +242,13 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
           <div className="flex items-center gap-4 bg-[#0a0a0a] p-4 rounded-[2rem] border border-white/5">
              <div className="pr-2 text-right">
                 <p className="text-xs font-black uppercase italic text-white">{userSession?.user?.name}</p>
-                <p className="text-[9px] font-bold text-yellow-400 uppercase tracking-widest leading-none mt-1">{isAdmin ? 'ADMINISTRADOR' : 'AGENTE AFL'}</p>
+                <p className="text-[9px] font-bold text-yellow-400 uppercase tracking-widest mt-1 leading-none">{isAdmin ? 'ADMINISTRADOR' : 'AGENTE AFL'}</p>
              </div>
-             <img src={userSession?.user?.image} className="w-12 h-12 rounded-[1.2rem] border-2 border-yellow-400/30 shadow-lg" alt="" />
+             <img src={userSession?.user?.image} className="w-12 h-12 rounded-[1.2rem] border-2 border-yellow-400/30" alt="" />
           </div>
         </header>
 
-        {/* TELA: DASHBOARD */}
+        {/* --- ABA INICIO --- */}
         {activeTab === 'inicio' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4">
              <StatCard title="VALOR BRUTO (MÊS)" value={equipeProcessada.reduce((a,m)=>a+m.bruto,0)} icon={<TrendingUp size={32}/>} type="money" />
@@ -256,7 +257,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
           </div>
         )}
 
-        {/* TELA: RANKING */}
+        {/* --- ABA RANKING --- */}
         {activeTab === 'ranking' && (
           <div className="bg-[#0a0a0a] border border-white/5 rounded-[3rem] overflow-hidden shadow-2xl animate-in fade-in">
              <table className="w-full text-left font-black uppercase">
@@ -276,7 +277,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
           </div>
         )}
 
-        {/* TELA: EFETIVO */}
+        {/* --- ABA EFETIVO --- */}
         {activeTab === 'equipe' && (
           <div className="animate-in fade-in">
              <div className="flex gap-2 mb-8 overflow-x-auto pb-4 no-scrollbar">
@@ -287,7 +288,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {equipeFiltrada.map(m => (
                   <div key={m.discordId} onClick={() => setMembroSelecionado(m)} className="bg-[#0a0a0a] p-8 rounded-[2.5rem] border border-white/5 hover:border-yellow-400/50 transition-all cursor-pointer group shadow-xl">
-                    <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000`} className="w-16 h-16 rounded-[1.5rem] mb-6 border-2 border-zinc-800 group-hover:border-yellow-400 transition-colors" alt="" />
+                    <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000`} className="w-16 h-16 rounded-[1.5rem] mb-6 border-2 border-zinc-800 group-hover:border-yellow-400" alt="" />
                     <h4 className="font-black uppercase text-white text-xl mb-1 truncate">{m.nome}</h4>
                     <p className="text-[10px] text-yellow-400 font-bold mb-6 italic tracking-widest uppercase">{m.cargo}</p>
                     <div className="pt-6 border-t border-white/5 space-y-3 text-[10px] font-black uppercase tracking-widest">
@@ -301,7 +302,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
           </div>
         )}
 
-        {/* TELA: MURAL PÚBLICO */}
+        {/* --- ABA MURAL --- */}
         {activeTab === 'gestao' && (
            <div className="bg-[#0a0a0a] border border-white/5 rounded-[3.5rem] overflow-hidden shadow-2xl animate-in fade-in">
               <div className="overflow-x-auto">
@@ -325,7 +326,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
            </div>
         )}
 
-        {/* TELA: REGISTRAR */}
+        {/* --- ABA REGISTRAR --- */}
         {activeTab === 'registrar' && (
           <div className="max-w-2xl mx-auto animate-in zoom-in-95">
              <div className="flex gap-2 p-1 bg-[#0a0a0a] rounded-2xl mb-8 border border-white/5 overflow-x-auto no-scrollbar">
@@ -352,7 +353,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                          <InputField label="VALOR TOTAL (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="0,00" />
                          <InputField label="VALOR RECEBIDO (R$)" type="number" value={form.valorRecebido} onChange={(v:any)=>setForm({...form, valorRecebido: v})} placeholder="0,00" />
                        </div>
-                       <InputField label="VENCIMENTO DO RESTANTE" type="date" value={form.dataVencimento} onChange={(v:any)=>setForm({...form, dataVencimento: v})} required={false} />
+                       <InputField label="VENCIMENTO DO RESTANTE (OPCIONAL)" type="date" value={form.dataVencimento} onChange={(v:any)=>setForm({...form, dataVencimento: v})} required={false} />
                      </div>
                    )}
 
@@ -364,11 +365,11 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
                    {form.tipo === 'SAQUE' && (
                      <div className="space-y-6 animate-in fade-in bg-green-500/5 border border-green-500/20 p-8 rounded-3xl">
-                       <InputField label="VALOR TRANSFERIDO (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="0,00" />
+                       <InputField label="VALOR TRANSFERIDO (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="Dinheiro enviado ao membro" />
                      </div>
                    )}
 
-                   <button disabled={loading} className="w-full bg-yellow-400 text-black font-black py-6 rounded-2xl uppercase tracking-[0.3em] text-xs shadow-xl transition-all italic mt-8 hover:bg-yellow-300">
+                   <button disabled={loading} className="w-full bg-yellow-400 text-black font-black py-6 rounded-2xl uppercase tracking-[0.3em] text-xs shadow-xl italic mt-8 hover:bg-yellow-300">
                       {loading ? 'PROCESSANDO...' : 'ENVIAR PARA BANCO DE DADOS'}
                    </button>
                 </form>
@@ -376,7 +377,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
           </div>
         )}
 
-        {/* TELA: PENDÊNCIAS */}
+        {/* --- ABA PENDÊNCIAS --- */}
         {activeTab === 'pendencias' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in fade-in">
              {pendencias.length === 0 && <p className="col-span-full text-zinc-600 font-black uppercase text-center py-20">Nenhuma cobrança ativa.</p>}
@@ -384,7 +385,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                <div key={r.id} className="bg-[#0a0a0a] p-10 rounded-[3rem] border border-red-500/20 shadow-2xl flex flex-col justify-between group">
                   <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-6">
                      <h4 className="text-3xl text-white italic font-black uppercase truncate pr-4">{r.cliente}</h4>
-                     <span className="bg-red-500 text-white text-[9px] px-3 py-1.5 rounded-full font-black tracking-widest whitespace-nowrap">FALTA R$ {formatMoney(Number(r.valor) - Number(r.valorRecebido))}</span>
+                     <span className="bg-red-500 text-white text-[9px] px-3 py-1.5 rounded-full font-black tracking-widest">FALTA R$ {formatMoney(Number(r.valor) - Number(r.valorRecebido))}</span>
                   </div>
                   <div className="space-y-2 mb-8 text-[10px] font-black uppercase text-zinc-500">
                      <p>VENDEDOR: <span className="text-zinc-300 ml-2">{r.nome}</span></p>
@@ -397,7 +398,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
           </div>
         )}
 
-        {/* TELA: APROVAÇÕES */}
+        {/* --- ABA APROVAÇÕES --- */}
         {activeTab === 'admin' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in fade-in">
              {aguardando.length === 0 && <p className="col-span-full text-zinc-600 font-black uppercase text-center py-20">Fila limpa.</p>}
@@ -420,11 +421,11 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
           </div>
         )}
 
-        {/* TELA: ADMIN ZONE */}
+        {/* --- ABA ADMIN ZONE --- */}
         {activeTab === 'admin_zone' && (
            <div className="space-y-8 animate-in fade-in">
              <div className="bg-red-500/5 border border-red-500/20 p-10 rounded-[3rem] max-w-xl">
-                <h3 className="text-3xl font-black italic text-white mb-4">FECHAMENTO MENSAL</h3>
+                <h3 className="text-3xl font-black italic text-white mb-4">VIRADA MENSAL</h3>
                 <p className="text-zinc-500 mb-8 text-[10px] font-black uppercase tracking-widest leading-relaxed">Arquiva o mês atual e zera as produções. Os saldos são convertidos em Saldo Retido.</p>
                 <button onClick={virarMes} disabled={loading} className="w-full bg-red-600 text-white font-black py-5 rounded-2xl uppercase text-xs shadow-xl hover:bg-red-500">EXECUTAR VIRADA DE MÊS</button>
              </div>
@@ -432,12 +433,12 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
              <div className="bg-[#0a0a0a] border border-white/5 rounded-[3.5rem] overflow-hidden shadow-2xl">
                  <table className="w-full text-left font-black uppercase text-[10px] tracking-widest whitespace-nowrap min-w-max">
                    <thead className="bg-white/5 text-zinc-500 border-b border-white/5">
-                     <tr><th className="px-8 py-6">MEMBRO</th><th className="px-8 py-6">TIPO</th><th className="px-8 py-6">VALOR</th><th className="px-8 py-6 text-right">EXCLUIR</th></tr>
+                     <tr><th className="px-8 py-6">MEMBRO / VENDEDOR</th><th className="px-8 py-6">TIPO</th><th className="px-8 py-6">VALOR</th><th className="px-8 py-6 text-right">EXCLUIR</th></tr>
                    </thead>
                    <tbody className="divide-y divide-white/5">
                      {registros.filter(r => r.status === 'APROVADO').map((r: any) => (
                        <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
-                         <td className="px-8 py-6 text-white">{r.nome}</td>
+                         <td className="px-8 py-6 text-white text-xs">{r.nome}</td>
                          <td className="px-8 py-6 text-zinc-500">{r.tipo}</td>
                          <td className="px-8 py-6 text-yellow-400 font-mono text-sm">R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
                          <td className="px-8 py-6 text-right"><button onClick={() => deletarLog(r.id)} className="text-red-500/50 hover:text-red-500 p-2"><Trash2 size={16}/></button></td>
@@ -449,12 +450,12 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
            </div>
         )}
 
-        {/* TELA: HISTÓRICO BACKUP SELETOR */}
+        {/* --- ABA HISTÓRICO BACKUP --- */}
         {activeTab === 'historico_backup' && (
           <div className="space-y-8 animate-in fade-in">
-             <div className="flex flex-col md:flex-row md:items-center gap-6 bg-[#0a0a0a] p-8 rounded-[3rem] border border-white/5">
+             <div className="flex flex-col md:flex-row md:items-center gap-6 bg-[#0a0a0a] p-8 rounded-[3rem] border border-white/5 shadow-xl">
                  <div className="flex-1">
-                    <p className="text-[10px] font-black uppercase text-zinc-500 mb-2 tracking-widest">MÊS DE REFERÊNCIA</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">MÊS DE REFERÊNCIA</p>
                     <select value={mesBackup} onChange={(e) => setMesBackup(e.target.value)} className="w-full bg-black border border-white/10 text-yellow-400 p-4 rounded-2xl outline-none font-black uppercase text-sm cursor-pointer appearance-none">
                         {mesesDisponiveis.map(m => <option key={m} value={m}>{formatMes(m)}</option>)}
                     </select>
@@ -478,8 +479,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                    </thead>
                    <tbody className="divide-y divide-white/5">
                      {registrosDoMesBackup.map((r: any) => (
-                       <tr key={r.id} className="hover:bg-white/[0.02]">
-                         <td className="px-8 py-6 text-white">{r.nome}</td>
+                       <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
+                         <td className="px-8 py-6 text-white text-xs">{r.nome}</td>
                          <td className="px-8 py-6 text-zinc-500">{r.tipo}</td>
                          <td className={`px-8 py-6 font-mono text-sm ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
                          <td className="px-8 py-6 text-zinc-600">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
@@ -493,14 +494,14 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
       </main>
 
-      {/* --- MODAL DETALHADO DO MEMBRO --- */}
+      {/* --- MODAL DETALHADO DO MEMBRO (EXTRATO) --- */}
       {membroSelecionado && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-6 animate-in fade-in backdrop-blur-sm">
            <div className="bg-[#050505] border border-white/10 w-full max-w-5xl rounded-[4rem] flex flex-col max-h-[90vh] overflow-hidden shadow-2xl">
               <div className="p-12 border-b border-white/5 flex justify-between items-start bg-gradient-to-br from-yellow-400/5 to-transparent relative">
                  <button onClick={() => setMembroSelecionado(null)} className="absolute top-10 right-10 text-zinc-600 hover:text-yellow-400 bg-black p-3 rounded-full border border-white/5"><X size={24}/></button>
                  <div className="flex items-center gap-8 w-full pr-16">
-                    <img src={membroSelecionado.avatar || `https://ui-avatars.com/api/?name=${membroSelecionado.nome}&background=EAB308&color=000`} className="w-32 h-32 rounded-[2.5rem] border-2 border-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.2)]" alt="" />
+                    <img src={membroSelecionado.avatar || `https://ui-avatars.com/api/?name=${membroSelecionado.nome}&background=EAB308&color=000`} className="w-32 h-32 rounded-[2.5rem] border-2 border-yellow-400 shadow-lg" alt="" />
                     <div className="flex-1 min-w-0">
                        <h2 className="text-4xl sm:text-5xl font-black uppercase italic tracking-tighter text-white leading-none truncate">{membroSelecionado.nome}</h2>
                        <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-[10px] mt-4 bg-yellow-400/10 inline-block px-4 py-1.5 rounded-full">{membroSelecionado.cargo}</p>
