@@ -4,60 +4,57 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-function toNumber(val: any) {
-  if (typeof val === 'number') return val;
-  if (!val) return 0;
-  return parseFloat(String(val).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
-}
-
 export async function GET(req: Request) {
   try {
-    const url = new URL(req.url);
-    const fixar = url.searchParams.get('fix') === 'true';
+    // 1. Volta tudo o que foi "Arquivado" para "Aprovado" (Desfaz a virada burra)
+    await prisma.registro.updateMany({
+      where: { status: 'ARQUIVADO' },
+      data: { status: 'APROVADO' }
+    });
+
+    // 2. Apaga os registros de "Saldo Retido" duplicados que o sistema criou na virada
+    await prisma.registro.deleteMany({
+      where: { item: { contains: 'SALDO RETIDO' } }
+    });
 
     const registros = await prisma.registro.findMany({
-      where: { status: { in: ['APROVADO', 'APROVAR'] } }
+      where: { status: 'APROVADO' }
     });
     const membros = await prisma.membro.findMany();
-
-    if (fixar) {
-        await prisma.registro.updateMany({ where: { status: 'APROVAR' }, data: { status: 'APROVADO' } });
-        await prisma.registro.updateMany({ where: { status: 'REPROVAR' }, data: { status: 'REPROVADO' } });
-    }
 
     const relatorio = [];
 
     for (const membro of membros) {
-      let cVendas = 0; let cRec = 0; let cRecrut = 0; let cExtra = 0; let cPago = 0;
-      const history = registros.filter(r => String(r.discordId) === String(membro.discordId) || String(r.recrutadoId) === String(membro.discordId));
+      const history = registros.filter(r => String(r.discordId) === String(membro.discordId));
+      
+      let vTot = 0; let vRec = 0; let vExtra = 0; let vPago = 0;
 
       for (const r of history) {
-        const vTot = toNumber(r.valor) || toNumber((r as any).financeiro);
-        const vRec = toNumber(r.valorRecebido) || vTot;
-        const ext = toNumber(r.cashbackExtra);
-
         if (r.tipo === 'VENDA' || !r.tipo) {
-          if (String(r.discordId) === String(membro.discordId)) { cVendas += vTot; cRec += vRec; cExtra += ext; }
-        } else if (r.tipo === 'RECRUTAMENTO') {
-           if (String(r.discordId) === String(membro.discordId)) { cRecrut += toNumber(r.quantidade) || 1; cExtra += ext; }
-        } else if (r.tipo === 'SAQUE') {
-           if (String(r.discordId) === String(membro.discordId) || String(r.recrutadoId) === String(membro.discordId)) cPago += vTot;
+          vTot += Number(r.valor) || 0;
+          vRec += Number(r.valorRecebido) || 0;
         } else if (r.tipo === 'CORRIDINHA') {
-           // A MÁGICA TÁ AQUI: Agora o robô devolve o dinheiro da Corridinha!
-           if (String(r.discordId) === String(membro.discordId)) cExtra += ext; 
+          vExtra += Number(r.cashbackExtra) || 0;
+        } else if (r.tipo === 'SAQUE') {
+          vPago += Number(r.valor) || 0;
         }
       }
 
-      cVendas = Number(cVendas.toFixed(2)); cRec = Number(cRec.toFixed(2)); cExtra = Number(cExtra.toFixed(2)); cPago = Number(cPago.toFixed(2));
-
-      if (fixar) {
-        await prisma.membro.update({
-          where: { discordId: membro.discordId },
-          data: { vendas: cVendas, valorRecebido: cRec, recrutamentos: cRecrut, cashbackExtra: cExtra, cashbackPago: cPago }
-        });
-      }
-      relatorio.push({ nome: membro.nome, restaurado: { vendas: cVendas, bonus_corridinha: cExtra } });
+      // Atualiza o membro com a verdade absoluta do banco
+      await prisma.membro.update({
+        where: { discordId: membro.discordId },
+        data: {
+          vendas: vTot,
+          valorRecebido: vRec,
+          cashbackExtra: vExtra,
+          cashbackPago: vPago
+        }
+      });
+      relatorio.push({ nome: membro.nome, status: "RESTAURADO" });
     }
-    return NextResponse.json({ STATUS: "SISTEMA FINANCEIRO RESTAURADO COM SUCESSO!", DETALHES: relatorio });
-  } catch (e) { return NextResponse.json({ error: "Erro interno" }, { status: 500 }); }
+
+    return NextResponse.json({ message: "SISTEMA RESTAURADO!", detalhes: relatorio });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
 }

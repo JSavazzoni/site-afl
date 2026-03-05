@@ -7,11 +7,11 @@ const prisma = new PrismaClient();
 export async function GET() {
   try {
     const registros = await prisma.registro.findMany({
-      where: { status: { in: ['APROVADO', 'ARQUIVADO', 'PENDENTE'] } },
+      where: { status: { in: ['APROVADO', 'PENDENTE', 'ARQUIVADO'] } },
       orderBy: { criado_em: 'desc' }
     });
     return NextResponse.json(registros);
-  } catch (error) {
+  } catch {
     return NextResponse.json([], { status: 500 });
   }
 }
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       }
     });
     return NextResponse.json(novo);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
