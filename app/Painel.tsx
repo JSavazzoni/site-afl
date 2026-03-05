@@ -40,7 +40,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
   
-  // Define dinamicamente o mês em que o site está (Ex: "2026-03")
   const dataAtual = new Date();
   const mesAtualStr = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}`;
 
@@ -155,48 +154,43 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     setLoading(false);
   };
 
-  // --- FILTROS DE TELA (FOCADOS NO MÊS ATUAL) ---
+  // --- MATEMÁTICA VISUAL BLINDADA DO FRONT-END ---
   
-  // Bruto: Pega as vendas do mês atual (ignorando dívida herdada)
-  const getProducaoBruta = (discordId: string) => {
-    return registros
-      .filter(r => 
-        String(r.discordId || r.vendedorId) === String(discordId) && 
+  const equipeOrdenada = [...equipe].map(m => {
+    const memberRegs = registros.filter(r => 
+        String(r.discordId || r.vendedorId) === String(m.discordId) && 
         (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
-        (r.tipo === 'VENDA' || !r.tipo) && 
-        !(r.item || '').includes('[Dívida Antiga]') && 
-        !(r.item || '').includes('Saldo Retido') &&
         r.criado_em && r.criado_em.startsWith(mesAtualStr)
-      )
-      .reduce((a, r) => a + (Number(r.valor) || 0), 0);
-  };
+    );
 
-  // Líquido: Dinheiro vivo que a empresa recebeu desse vendedor no mês atual
-  const getLiquidoMembro = (discordId: string) => {
-    return registros
-      .filter(r => 
-        String(r.discordId || r.vendedorId) === String(discordId) && 
-        (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
-        (r.tipo === 'VENDA' || !r.tipo) && 
-        !(r.item || '').includes('Saldo Retido') &&
-        r.criado_em && r.criado_em.startsWith(mesAtualStr)
-      )
-      .reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
-  };
+    // Bruto Real: Vendas do mês, ignora a dívida herdada
+    const producaoReal = memberRegs
+        .filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('[DÍVIDA ANTIGA]'))
+        .reduce((a, r) => a + (Number(r.valor) || 0), 0);
 
-  const pendencias = registros.filter(r => r.status === 'APROVADO' && (r.tipo === 'VENDA' || !r.tipo) && Number(r.valorRecebido) < Number(r.valor));
-  const aguardando = registros.filter(r => r.status === 'PENDENTE');
-  
-  // Organiza a equipe aplicando os cálculos do Front-End
-  const equipeOrdenada = [...equipe].map(m => ({ 
-      ...m, 
-      producaoReal: getProducaoBruta(m.discordId),
-      liquidoReal: getLiquidoMembro(m.discordId)
-  })).sort((a, b) => b.producaoReal - a.producaoReal);
+    // Líquido Real: Dinheiro que o membro rendeu pra empresa no mês
+    const liquidoReal = memberRegs
+        .filter(r => (r.tipo === 'VENDA' || !r.tipo))
+        .reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
+
+    // Corridinhas Reais (Visual): Ignora o Saldo Retido do Mês Anterior para não poluir a caixa
+    const corridinhasReal = memberRegs
+        .filter(r => r.tipo === 'CORRIDINHA' && !(r.item || '').toUpperCase().includes('SALDO RETIDO'))
+        .reduce((a, r) => a + (Number(r.valor || r.cashbackExtra) || 0), 0);
+
+    // Pago Real (Visual): Ignora se tiver dívida retida
+    const pagoReal = memberRegs
+        .filter(r => r.tipo === 'SAQUE' && !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA'))
+        .reduce((a, r) => a + (Number(r.valor || r.financeiro) || 0), 0);
+
+    return { ...m, producaoReal, liquidoReal, corridinhasReal, pagoReal };
+  }).sort((a, b) => b.producaoReal - a.producaoReal);
   
   const equipeFiltrada = selectedCargo === 'Todos' ? equipeOrdenada : equipeOrdenada.filter(m => m.cargoPainel === selectedCargo);
   
-  // Atualiza o membro selecionado no modal para refletir os números reais
+  const pendencias = registros.filter(r => r.status === 'APROVADO' && (r.tipo === 'VENDA' || !r.tipo) && Number(r.valorRecebido) < Number(r.valor));
+  const aguardando = registros.filter(r => r.status === 'PENDENTE');
+
   useEffect(() => {
     if (membroSelecionado) {
        const atualizado = equipeOrdenada.find((m: any) => String(m.discordId) === String(membroSelecionado.discordId));
@@ -204,26 +198,25 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     }
   }, [equipeOrdenada, membroSelecionado]);
 
-  // Histórico do Extrato do Membro (Só do Mês Atual)
+  // Histórico de Lançamentos (Oculta o Saldo Retido Visualmente)
   const historicoMembro = membroSelecionado ? registros.filter(r => 
     String(r.discordId || r.vendedorId) === String(membroSelecionado.discordId) && 
     (r.status === 'APROVADO' || r.status === 'ARQUIVADO') &&
     r.criado_em && r.criado_em.startsWith(mesAtualStr) &&
-    !(r.item || '').includes('Saldo Retido')
+    !(r.item || '').toUpperCase().includes('SALDO RETIDO') &&
+    !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')
   ).sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime()) : [];
 
-  // MURAL PÚBLICO (Geral do Mês Atual)
   const registrosMural = registros.filter(r => 
     (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
     r.criado_em && r.criado_em.startsWith(mesAtualStr) &&
-    !(r.item || '').includes('Saldo Retido')
+    !(r.item || '').toUpperCase().includes('SALDO RETIDO') &&
+    !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')
   ).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
 
-  // DASHBOARD TOTAIS
   const totalBruto = equipeOrdenada.reduce((a, m) => a + m.producaoReal, 0);
   const totalLiquido = equipeOrdenada.reduce((a, m) => a + m.liquidoReal, 0);
 
-  // BACKUP MENSAL (Filtro Antigo)
   const mesesDisponiveis = Array.from(new Set(registros.map(r => {
     const d = new Date(r.criado_em);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -602,8 +595,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                        <p className="text-5xl font-mono italic text-green-400 font-black">R$ {formatMoney(calcAReceber(membroSelecionado))}</p>
                     </div>
                     <div className="grid grid-cols-2 gap-6">
-                      <div className="bg-blue-500/5 border border-blue-500/10 p-6 rounded-[2rem]"><p className="text-[9px] font-black text-blue-500 mb-1 uppercase tracking-widest">Corridinhas</p><p className="text-2xl font-mono text-blue-400">+R$ {formatMoney(membroSelecionado.cashbackExtra)}</p></div>
-                      <div className="bg-red-500/5 border border-red-500/10 p-6 rounded-[2rem]"><p className="text-[9px] font-black text-red-500 mb-1 uppercase tracking-widest">Já Pago</p><p className="text-2xl font-mono text-red-400">-R$ {formatMoney(membroSelecionado.cashbackPago)}</p></div>
+                      <div className="bg-blue-500/5 border border-blue-500/10 p-6 rounded-[2rem]"><p className="text-[9px] font-black text-blue-500 mb-1 uppercase tracking-widest">Corridinhas</p><p className="text-2xl font-mono text-blue-400">+R$ {formatMoney(membroSelecionado.corridinhasReal)}</p></div>
+                      <div className="bg-red-500/5 border border-red-500/10 p-6 rounded-[2rem]"><p className="text-[9px] font-black text-red-500 mb-1 uppercase tracking-widest">Já Pago</p><p className="text-2xl font-mono text-red-400">-R$ {formatMoney(membroSelecionado.pagoReal)}</p></div>
                     </div>
                  </div>
                  <div className="space-y-4">
