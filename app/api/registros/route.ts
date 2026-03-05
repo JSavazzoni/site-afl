@@ -4,55 +4,37 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// FUNÇÃO PARA BUSCAR REGISTROS (Ajustada para mostrar arquivados também)
 export async function GET() {
   try {
     const registros = await prisma.registro.findMany({
-      where: {
-        status: {
-          in: ['APROVADO', 'ARQUIVADO', 'PENDENTE']
-        }
-      },
-      orderBy: {
-        criado_em: 'desc'
-      }
+      where: { status: { in: ['APROVADO', 'ARQUIVADO', 'PENDENTE'] } },
+      orderBy: { criado_em: 'desc' }
     });
     return NextResponse.json(registros);
   } catch (error) {
-    console.error("Erro ao buscar registros:", error);
     return NextResponse.json([], { status: 500 });
   }
 }
 
-// FUNÇÃO PARA POSTAR NOVOS REGISTROS
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { 
-      tipo, vendedorId, cliente, item, valorNumerico, recebidoNumerico, 
-      vendedorNome, cashbackExtra, recrutadoId, dataVencimento 
-    } = body;
-
-    // Criar o registro no banco de dados
-    const novoRegistro = await prisma.registro.create({
+    const novo = await prisma.registro.create({
       data: {
-        tipo: tipo || 'VENDA',
-        discordId: vendedorId || recrutadoId, // ID de quem fez a ação
-        nome: vendedorNome,
-        cliente: cliente || 'N/A',
-        item: item || 'N/A',
-        valor: valorNumerico || 0,
-        valorRecebido: recebidoNumerico || 0,
-        cashbackExtra: cashbackExtra || 0,
-        recrutadoId: recrutadoId || null,
-        status: 'PENDENTE', // Todos entram para análise do ADM
-        dataVencimento: dataVencimento || null,
+        tipo: body.tipo || 'VENDA',
+        discordId: body.vendedorId || body.recrutadoId || body.membroSaqueId,
+        nome: body.vendedorNome || body.cliente,
+        cliente: body.cliente || 'N/A',
+        item: body.item || 'N/A',
+        valor: Number(body.valorNumerico) || 0,
+        valorRecebido: Number(body.recebidoNumerico) || 0,
+        cashbackExtra: Number(body.cashbackExtra) || 0,
+        status: 'PENDENTE',
+        dataVencimento: body.dataVencimento || null
       }
     });
-
-    return NextResponse.json(novoRegistro);
-  } catch (error) {
-    console.error("Erro ao criar registro:", error);
-    return NextResponse.json({ error: "Erro ao processar registro" }, { status: 500 });
+    return NextResponse.json(novo);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
