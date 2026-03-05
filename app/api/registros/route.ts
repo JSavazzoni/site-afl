@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       data: {
         tipo: body.tipo || 'VENDA',
         discordId: body.vendedorId || body.recrutadoId || body.membroSaqueId,
-        nome: body.vendedorNome || body.cliente,
+        nome: body.vendedorNome || body.cliente || 'Sistema',
         cliente: body.cliente || 'N/A',
         item: body.item || 'N/A',
         valor: Number(body.valorNumerico) || 0,
