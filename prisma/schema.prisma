@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Membro {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  discordId     String   @unique
+  nome          String
+  cargo         String   @default("Membro AFL")
+  vendas        Float    @default(0)
+  valorRecebido Float    @default(0) 
+  recrutamentos Int      @default(0)
+  cashbackExtra Float    @default(0)
+  cashbackPago  Float    @default(0) // NOVO: O que já foi transferido pra ele
+  atualizado_em DateTime @updatedAt
+}
+
+model Registro {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  nome               String
+  discordId          String
+  tipo               String   // VENDA, RECRUTAMENTO ou SAQUE
+  cliente            String?
+  cpfEmail           String?
+  item               String?
+  valorPagamento     String?
+  idDiscordAvancado  String?
+  valor              Float?   
+  valorRecebido      Float?   
+  cashbackExtra      Float?
+  dataVencimento     String?   
+  recrutadoId        String?
+  quantidade         Int?
+  status             String   @default("PENDENTE")
+  criado_em          DateTime @default(now())
+}
