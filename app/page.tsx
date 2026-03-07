@@ -1,6 +1,6 @@
 "use client";
-import React, { useEffect, useState } from 'react';
-import { signIn, useSession, SessionProvider } from "next-auth/react";
+import React, { useEffect, useState, useCallback } from 'react';
+import { signIn, useSession, SessionProvider, signOut } from "next-auth/react";
 import { UsersRound, Lock, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Painel from './Painel'; 
@@ -14,61 +14,72 @@ function ConteudoPrincipal() {
   const [autorizado, setAutorizado] = useState(false);
   const [isUserAdmin, setIsUserAdmin] = useState(false);
 
-  useEffect(() => {
-    async function validarSeguranca() {
-      // Só faz a verificação se a pessoa passou do login do Discord
-      if (status === "authenticated" && session?.user) {
-        try {
-          const user = session.user as any;
-          const discordId = user.id; // Pega o ID único e imutável do Discord
+  // Função que faz o "Batimento Cardíaco" da Segurança
+  const validarSeguranca = useCallback(async () => {
+    if (status === "authenticated" && session?.user) {
+      try {
+        const user = session.user as any;
+        const discordId = user.id;
 
-          // VALIDAÇÃO AO VIVO: Pergunta pro banco de dados quem é a equipe real agora
-          const res = await fetch('/api/equipe', { cache: 'no-store' });
+        // VAI NO BANCO A CADA 5 SEGUNDOS (Ignora cache)
+        const res = await fetch(`/api/equipe?v=${Date.now()}`, { cache: 'no-store' });
+        
+        if (res.ok) {
+          const equipeDB = await res.json();
           
-          if (res.ok) {
-            const equipeDB = await res.json();
+          // Procura se a pessoa AINDA existe na lista oficial da equipe
+          const membroAtivo = equipeDB.find((m: any) => String(m.discordId) === String(discordId));
+
+          if (membroAtivo) {
+            // ✅ PASSOU NA SEGURANÇA: Ele está na equipe!
             
-            // Procura se o cara que logou realmente existe na lista da sua equipe
-            const membroAtivo = equipeDB.find((m: any) => String(m.discordId) === String(discordId));
+            // O Raio-X do Admin: Procura o ID do Cargo de Admin em qualquer lugar do perfil dele
+            const adminId = process.env.NEXT_PUBLIC_DISCORD_ADMIN_ROLE_ID || "SEM_ID";
+            const stringUser = JSON.stringify(user);
+            const stringDB = JSON.stringify(membroAtivo);
+            
+            const ehAdmin = stringUser.includes(adminId) || 
+                            stringDB.includes(adminId) || 
+                            user.isAdmin === true || 
+                            membroAtivo.cargoPainel === 'Master AFL';
 
-            if (membroAtivo) {
-              // ✅ PASSOU NA SEGURANÇA: Ele está na equipe!
-              
-              // Puxa o cargo atualizado dele direto do banco pra evitar burlar pelo cookie
-              const cargoReal = membroAtivo.cargoPainel || membroAtivo.cargo || user.cargo;
-              
-              // Verifica se ele tem permissão de Admin (Pela Variável ou pelo nome do cargo)
-              const ehAdmin = cargoReal === process.env.NEXT_PUBLIC_DISCORD_ADMIN_ROLE_ID || 
-                              cargoReal === 'Master AFL' || 
-                              user.isAdmin === true;
-              
-              setIsUserAdmin(ehAdmin);
-              setAutorizado(true);
-            } else {
-              // ❌ BARRADO: Ele logou no Discord, mas NÃO é da equipe (Invasor ou Ex-membro)
-              setAutorizado(false);
-              router.push('/acesso-negado');
-            }
+            setIsUserAdmin(ehAdmin);
+            setAutorizado(true);
+            setVerificando(false);
           } else {
-            // Se a API falhar, bloqueia por segurança
-            router.push('/acesso-negado');
+            // ❌ EXPULSO AO VIVO: Se o cara perdeu o cargo/saiu da equipe, o site chuta ele na hora
+            setAutorizado(false);
+            setVerificando(false);
+            // Destrói o cookie de login e joga pro acesso negado
+            signOut({ callbackUrl: '/acesso-negado' }); 
           }
-        } catch (error) {
-          router.push('/acesso-negado');
-        } finally {
-          setVerificando(false);
         }
-      } else if (status === "unauthenticated") {
-        // Se nem logado no Discord ele está, para de carregar e mostra a tela de login
-        setVerificando(false);
+      } catch (error) {
+        console.error("Falha na segurança ao vivo");
       }
+    } else if (status === "unauthenticated") {
+      setVerificando(false);
+      setAutorizado(false);
     }
+  }, [session, status]);
 
+  // Efeito que cria o loop infinito para manter o site "Ao Vivo"
+  useEffect(() => {
+    // Roda a primeira vez na hora
     validarSeguranca();
-  }, [session, status, router]);
+    
+    // Fica rodando de 5 em 5 segundos
+    let interval: any;
+    if (status === "authenticated") {
+      interval = setInterval(validarSeguranca, 5000);
+    }
+    
+    // Limpa o loop quando fecha o site
+    return () => clearInterval(interval);
+  }, [validarSeguranca, status]);
 
-  // 1. TELA DE CARREGAMENTO SEGURO (Enquanto checa o banco de dados)
-  if (status === "loading" || verificando) {
+  // 1. TELA DE CARREGAMENTO SEGURO
+  if (status === "loading" || (status === "authenticated" && verificando)) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <Loader2 className="animate-spin text-yellow-400" size={48} />
@@ -76,12 +87,13 @@ function ConteudoPrincipal() {
     );
   }
 
-  // 2. TELA DO PAINEL (Acesso 100% Confirmado e Autorizado)
+  // 2. TELA DO PAINEL (Acesso Confirmado e Administrador Validado)
+  // Obs: O `key` força o painel a recarregar as abas de admin na hora se ele ganhar/perder o cargo
   if (status === "authenticated" && autorizado) {
-    return <Painel userSession={session} initialIsAdmin={isUserAdmin} />;
+    return <Painel key={String(isUserAdmin)} userSession={session} initialIsAdmin={isUserAdmin} />;
   }
 
-  // 3. TELA DE LOGIN (Não tem sessão ativa no navegador)
+  // 3. TELA DE LOGIN (Não está logado)
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden text-white selection:bg-yellow-400">
       
@@ -110,7 +122,7 @@ function ConteudoPrincipal() {
         </button>
       </main>
 
-      {/* FOOTER DA TELA DE LOGIN */}
+      {/* FOOTER DESENVOLVIDO POR VZ */}
       <footer className="absolute bottom-8 flex flex-col items-center pointer-events-none opacity-40">
          <p className="text-[8px] md:text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500 italic mb-2 text-center">
             © {new Date().getFullYear()} AFL PAINEL • TODOS OS DIREITOS RESERVADOS
