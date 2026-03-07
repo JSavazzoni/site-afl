@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 const hierarchy = [
   { id: process.env.ROLE_RESP_VENDAS, name: 'Resp.Vendas' },
-  { id: process.env.ROLE_MASTER, name: 'Master AFL' }, // <-- MUDOU AQUI
+  { id: process.env.ROLE_MASTER, name: 'Master AFL' },
   { id: process.env.ROLE_RESP_AFL, name: 'Resp.AFL' },
   { id: process.env.ROLE_AUXILIAR, name: 'Auxiliar AFL' },
   { id: process.env.ROLE_LIDER, name: 'Lider AFL' },
@@ -27,6 +27,9 @@ export async function GET() {
     const dbMembers = await prisma.membro.findMany();
     const equipeFormatada = [];
 
+    // Pegamos o ID de Admin da sua variável de ambiente
+    const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID;
+
     for (const member of discordMembers) {
       if (member.user?.bot) continue;
 
@@ -34,20 +37,26 @@ export async function GET() {
       for (const roleDef of hierarchy) {
         if (roleDef.id && member.roles.includes(roleDef.id)) {
           cargoPainel = roleDef.name;
-          break; // Pega sempre o cargo mais alto que o membro tiver
+          break; 
         }
       }
 
+      // SÓ ENTRA NO SITE SE TIVER UM CARGO DA HIERARQUIA
       if (cargoPainel) {
         const dbData = dbMembers.find((db: any) => String(db.discordId) === String(member.user.id));
+        
+        // VERIFICAÇÃO DE ADMIN AO VIVO
+        const ehAdmin = (adminRoleId && member.roles.includes(adminRoleId)) || cargoPainel === 'Master AFL';
+
         equipeFormatada.push({
           discordId: String(member.user.id),
           nome: member.nick || member.user.global_name || member.user.username,
           avatar: member.user.avatar ? `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png',
           cargoPainel: cargoPainel,
+          // AQUI ESTÁ O CARIMBO QUE O SITE VAI LER:
+          isAdminRealTime: ehAdmin, 
           vendas: dbData ? Number(dbData.vendas) : 0,
           valorRecebido: dbData ? Number(dbData.valorRecebido) : 0, 
-          recrutamentos: dbData ? Number(dbData.recrutamentos) : 0,
           cashbackExtra: dbData ? Number(dbData.cashbackExtra) : 0,
           cashbackPago: dbData ? Number(dbData.cashbackPago) : 0
         });
