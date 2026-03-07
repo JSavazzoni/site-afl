@@ -34,7 +34,7 @@ function ConteudoPrincipal() {
             // ✅ PASSOU NA SEGURANÇA: Ele está na equipe!
             
             // O Raio-X do Admin: Procura o ID do Cargo de Admin em qualquer lugar do perfil dele
-            const adminId = process.env.NEXT_PUBLIC_DISCORD_ADMIN_ROLE_ID || "SEM_ID";
+            const adminId = process.env.DISCORD_ADMIN_ROLE_ID || "SEM_ID";
             const stringUser = JSON.stringify(user);
             const stringDB = JSON.stringify(membroAtivo);
             
