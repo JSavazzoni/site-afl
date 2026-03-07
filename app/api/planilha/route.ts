@@ -20,26 +20,31 @@ export async function GET() {
     const dataAtual = new Date();
     const mesAtualStr = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}`;
 
-    // Colocamos (m: any) e (r: any) para calar a boca do TypeScript
     const equipeProcessada = equipe.map((m: any) => {
         const cargoReal = m.cargoPainel || m.cargo || 'Membro AFL';
         const perc = getCashback(cargoReal);
 
-        // Produção do Mês (Convertendo a data do banco para Texto antes de pesquisar)
         const regsMes = registros.filter((r: any) => {
             const dataTexto = r.criado_em instanceof Date ? r.criado_em.toISOString() : String(r.criado_em);
             return String(r.discordId) === String(m.discordId) && dataTexto.startsWith(mesAtualStr);
         });
 
-        const bruto = regsMes.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA')).reduce((a: any, r: any) => a + Number(r.valor || 0), 0);
-        const liq = regsMes.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo)).reduce((a: any, r: any) => a + Number(r.valorRecebido || 0), 0);
-        const corridinhas = regsMes.filter((r: any) => r.tipo === 'CORRIDINHA' && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).reduce((a: any, r: any) => a + Number(r.cashbackExtra || 0), 0);
+        // Bruto (Apenas vendas normais)
+        const bruto = regsMes.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a: any, r: any) => a + Number(r.valor || 0), 0);
         
-        // Saldo Inteligente (Calculado na hora)
+        // Caixa (Vendas Normais + Parcelas pagas no mês)
+        const liqVendas = regsMes.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a: any, r: any) => a + Number(r.valorRecebido || 0), 0);
+        const liqParcelas = regsMes.filter((r: any) => (r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a: any, r: any) => a + (Number(r.valor) || Number(r.valorRecebido) || 0), 0);
+        const liq = liqVendas + liqParcelas;
+
+        const corridinhas = regsMes.filter((r: any) => r.tipo === 'CORRIDINHA' && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).reduce((a: any, r: any) => a + Number(r.cashbackExtra || 0), 0);
+        const pago = regsMes.filter((r: any) => r.tipo === 'SAQUE' && !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')).reduce((a: any, r: any) => a + Number(r.valor || 0), 0);
+        
         const regsAtivos = registros.filter((r: any) => String(r.discordId) === String(m.discordId) && r.status === 'APROVADO');
-        const ativoLiq = regsAtivos.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo)).reduce((a: any, r: any) => a + Number(r.valorRecebido || 0), 0);
+        const ativoLiq = regsAtivos.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a: any, r: any) => a + Number(r.valorRecebido || 0), 0);
         const ativoExtra = regsAtivos.filter((r: any) => r.tipo === 'CORRIDINHA').reduce((a: any, r: any) => a + Number(r.cashbackExtra || 0), 0);
         const ativoPago = regsAtivos.filter((r: any) => r.tipo === 'SAQUE').reduce((a: any, r: any) => a + Number(r.valor || 0), 0);
+        
         const saldoReal = (ativoLiq * perc) + ativoExtra - ativoPago;
 
         return {
@@ -48,7 +53,7 @@ export async function GET() {
             bruto: bruto,
             liquido: liq,
             bonus: corridinhas,
-            pago: ativoPago,
+            pago: pago,
             saldo: saldoReal
         };
     }).sort((a: any, b: any) => b.bruto - a.bruto);

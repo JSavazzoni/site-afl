@@ -19,7 +19,6 @@ const formatMes = (yyyyMM: string) => {
 };
 
 export default function Painel({ initialIsAdmin, userSession }: any) {
-  // --- ESTADOS ---
   const [activeTab, setActiveTab] = useState('inicio');
   const [selectedCargo, setSelectedCargo] = useState('Todos');
   const [registros, setRegistros] = useState<any[]>([]);
@@ -69,30 +68,31 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     }
   }, [registros, mesBackup]);
 
-  // --- PROCESSAMENTO EQUIPE E CÁLCULO INTELIGENTE DE SALDO ---
+  // --- CÁLCULO DE DADOS BLINDADO ---
   const equipeProcessada = equipe.map(m => {
     const cargoReal = m.cargoPainel || m.cargo || 'Membro AFL';
     const perc = getCashback(cargoReal);
 
-    // 1. Filtros Visuais do Mês Atual (Para as caixinhas pequenas)
     const regsMes = registros.filter(r => 
         String(r.discordId) === String(m.discordId) && 
         (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
         r.criado_em && r.criado_em.startsWith(mesAtualStr)
     );
 
-    const bruto = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA')).reduce((a, r) => a + (Number(r.valor) || 0), 0);
-    const liq = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo)).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
+    // BRUTO: Só vendas puras. Exclui dívidas antigas e logs de pagamento de parcela.
+    const bruto = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valor) || 0), 0);
+    
+    // CAIXA DO MÊS: Vendas Puras + Pagamentos de Parcelas soltas (A Mágica acontece aqui)
+    const liqVendas = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
+    const liqParcelas = regsMes.filter(r => (r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valor) || Number(r.valorRecebido) || 0), 0);
+    const liq = liqVendas + liqParcelas;
+
     const corridinhas = regsMes.filter(r => r.tipo === 'CORRIDINHA' && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
     const pago = regsMes.filter(r => r.tipo === 'SAQUE' && !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')).reduce((a, r) => a + (Number(r.valor) || 0), 0);
 
-    // 2. CÁLCULO DO SALDO REAL (Garante o desconto instantâneo dos saques)
-    // Ele olha para TODOS os registros ativos (Aprovados) que constroem a carteira do cara.
-    const regsAtivos = registros.filter(r => 
-        String(r.discordId) === String(m.discordId) && r.status === 'APROVADO'
-    );
-    
-    const ativoLiq = regsAtivos.filter(r => (r.tipo === 'VENDA' || !r.tipo)).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
+    // SALDO REAL: Lê de toda a vida da pessoa, ignorando log de parcela para não duplicar, pois a venda original já é atualizada na parcela.
+    const regsAtivos = registros.filter(r => String(r.discordId) === String(m.discordId) && r.status === 'APROVADO');
+    const ativoLiq = regsAtivos.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
     const ativoExtra = regsAtivos.filter(r => r.tipo === 'CORRIDINHA').reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
     const ativoPago = regsAtivos.filter(r => r.tipo === 'SAQUE').reduce((a, r) => a + (Number(r.valor) || 0), 0);
     
@@ -102,8 +102,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   }).sort((a, b) => b.bruto - a.bruto);
 
   const equipeFiltrada = selectedCargo === 'Todos' ? equipeProcessada : equipeProcessada.filter(m => m.cargoReal === selectedCargo);
-  
-  // Atualiza o membro selecionado em tempo real no modal sem fechar ele
   const modalMember = membroSelecionado ? equipeProcessada.find(m => m.discordId === membroSelecionado.discordId) || membroSelecionado : null;
   
   const aguardando = registros.filter(r => r.status === 'PENDENTE');
@@ -118,8 +116,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
   const mesesDisponiveis = Array.from(new Set(registros.map(r => r.criado_em?.substring(0, 7)))).filter(Boolean).sort().reverse();
   const registrosDoMesBackup = registros.filter(r => r.criado_em?.startsWith(mesBackup));
-  const backupBruto = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+Number(r.valor), 0);
-  const backupLiquido = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+Number(r.valorRecebido), 0);
+  const backupBruto = registrosDoMesBackup.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a,r)=>a+Number(r.valor), 0);
+  const backupLiquido = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+(Number(r.valorRecebido) || Number(r.valor)), 0);
 
   // --- AÇÕES DO PAINEL ---
   const handleEnviar = async (e: any) => {
@@ -140,7 +138,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     const res = await fetch('/api/registros', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (res.ok) {
       setForm({ tipo: 'VENDA', vendedorId: '', cliente: '', item: '', valor: '', valorRecebido: '', recrutadoId: '', dataVencimento: '', membroSaqueId: '' });
-      showToast("REGISTRO POSTADO COM SUCESSO!");
+      showToast("REGISTRO POSTADO!");
       pulse();
     }
     setLoading(false);
@@ -148,17 +146,17 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
   const decidir = async (id: string, acao: 'APROVAR' | 'REPROVAR') => {
     await fetch('/api/registros/analise', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registroId: id, acao }) });
-    pulse(); // Ao rodar o pulse, a tela puxa os registros e o desconto acontece na hora!
+    pulse(); 
   };
 
   const deletarLog = async (id: string) => {
-    if (!confirm("ATENÇÃO: Deletar esse registro permanentemente?")) return;
+    if (!confirm("ATENÇÃO: Deletar permanentemente?")) return;
     await fetch('/api/admin/logs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
     pulse();
   };
 
   const virarMes = async () => {
-    if (!confirm("ALERTA: Isso irá arquivar o mês e zerar o painel. Apenas use no 1º dia do mês.")) return;
+    if (!confirm("ALERTA: Isso irá arquivar o mês. Apenas use no 1º dia do mês.")) return;
     setLoading(true);
     await fetch('/api/admin/virada', { method: 'POST' });
     showToast("MÊS FECHADO!");
@@ -167,7 +165,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   };
 
   const forcarAuditoria = async () => {
-    if (!confirm("RESTAURAR SISTEMA: Voltar todas as vendas de Março para o Painel?")) return;
+    if (!confirm("RESTAURAR SISTEMA: Recalcular banco e voltar vendas?")) return;
     setLoading(true);
     await fetch('/api/admin/auditoria');
     showToast("SISTEMA RESTAURADO!");
@@ -187,7 +185,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   return (
     <div className="flex min-h-screen bg-[#050505] text-white font-sans selection:bg-yellow-400 overflow-hidden">
       
-      {/* CSS GLOBAL DA SCROLLBAR PREMIUM */}
       <style dangerouslySetInnerHTML={{__html: `
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #050505; border-left: 1px solid rgba(255,255,255,0.02); }
@@ -203,7 +200,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </div>
       )}
 
-      {/* --- SIDEBAR --- */}
+      {/* SIDEBAR */}
       <aside className="w-72 border-r border-white/5 bg-[#0a0a0a] p-8 flex flex-col z-50">
         <div className="flex items-center gap-4 mb-10 font-black italic text-2xl uppercase tracking-tighter">
           <div className="p-2.5 bg-yellow-400 rounded-xl text-black shadow-[0_0_25px_#facc15]"><UsersRound size={24}/></div>
@@ -240,7 +237,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </button>
       </aside>
 
-      {/* --- ÁREA PRINCIPAL --- */}
+      {/* ÁREA PRINCIPAL */}
       <main className="flex-1 p-10 lg:p-14 overflow-y-auto bg-[#050505] relative">
         <header className="mb-14 flex justify-between items-end border-b border-white/5 pb-8">
           <div>
@@ -323,7 +320,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
               <div className="overflow-x-auto">
                  <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
                    <thead className="bg-white/5 text-zinc-500 border-b border-white/5">
-                     <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5">CLIENTE / ITEM</th><th className="px-8 py-5">VALOR</th><th className="px-8 py-5 text-right">DATA</th></tr>
+                     <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5">CLIENTE / ITEM</th><th className="px-8 py-5 text-right">VALOR</th><th className="px-8 py-5 text-right">DATA</th></tr>
                    </thead>
                    <tbody className="divide-y divide-white/5">
                      {muralMes.map((r: any) => (
@@ -334,8 +331,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                                 {r.tipo || 'VENDA'}
                             </span>
                          </td>
-                         <td className="px-8 py-5 text-zinc-400 italic text-xs">{r.cliente || r.item || '-'}</td>
-                         <td className={`px-8 py-5 font-mono text-sm ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
+                         <td className="px-8 py-5 text-zinc-400 italic text-xs truncate max-w-xs">{r.cliente || r.item || '-'}</td>
+                         <td className={`px-8 py-5 font-mono text-sm text-right whitespace-nowrap ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
                          <td className="px-8 py-5 text-zinc-600 text-[10px] text-right">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
                        </tr>
                      ))}
@@ -394,11 +391,11 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                   <div className="relative z-10">
                     <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-6">
                        <h4 className="text-2xl text-white italic font-black uppercase truncate pr-4 tracking-tighter">{r.cliente}</h4>
-                       <span className="bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-black tracking-widest shadow-md whitespace-nowrap">FALTA R$ {formatMoney(Number(r.valor) - Number(r.valorRecebido))}</span>
+                       <span className="bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-black tracking-widest shadow-md whitespace-nowrap flex-shrink-0 ml-2">FALTA R$ {formatMoney(Number(r.valor) - Number(r.valorRecebido))}</span>
                     </div>
                     <div className="space-y-2 mb-8 text-[11px] font-black uppercase text-zinc-500 tracking-widest">
                        <p>AGENTE: <span className="text-zinc-100 ml-2">{r.nome}</span></p>
-                       <p>PRODUTO: <span className="text-zinc-100 ml-2">{r.item}</span></p>
+                       <p>PRODUTO: <span className="text-zinc-100 ml-2 truncate inline-block max-w-[150px] align-bottom">{r.item}</span></p>
                        <p className="mt-4 pt-2">VENCIMENTO: <span className="text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-md border border-yellow-400/20">{r.dataVencimento?.split('-').reverse().join('/') || 'A COMBINAR'}</span></p>
                     </div>
                   </div>
@@ -418,8 +415,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                      <h4 className="text-2xl text-white italic font-black uppercase mb-2 truncate tracking-tighter">{r.nome}</h4>
                      <p className="text-yellow-400 text-[10px] font-black uppercase mb-6 tracking-[0.2em] bg-yellow-400/10 inline-block px-3 py-1.5 rounded-lg">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</p>
                      <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
-                        <p>CLIENTE: <span className="text-zinc-300">{r.cliente}</span></p>
-                        <p>ITEM: <span className="text-zinc-300">{r.item}</span></p>
+                        <p>CLIENTE: <span className="text-zinc-300 truncate">{r.cliente}</span></p>
+                        <p className="truncate">ITEM: <span className="text-zinc-300">{r.item}</span></p>
                      </div>
                   </div>
                   <div className="flex gap-3">
@@ -520,7 +517,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         )}
       </main>
 
-      {/* --- MODAL DETALHADO DO MEMBRO (Renderização Inteligente e Fontes Ajustadas) --- */}
+      {/* --- MODAL DETALHADO DO MEMBRO --- */}
       {membroSelecionado && modalMember && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-6 sm:p-10 animate-in fade-in backdrop-blur-sm duration-300">
            <div className="bg-[#050505] border border-white/10 w-full max-w-5xl rounded-[3rem] flex flex-col max-h-[90vh] overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.8)]">
@@ -541,7 +538,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                     <div className="bg-gradient-to-br from-green-500/10 to-transparent border border-green-500/20 p-10 rounded-[2.5rem] shadow-xl relative overflow-hidden group">
                        <div className="absolute top-0 right-0 p-8 text-green-500/10 group-hover:scale-110 transition-transform duration-500"><Banknote size={100}/></div>
                        <p className="text-[11px] text-green-500 font-black uppercase mb-3 tracking-[0.3em] italic relative z-10">SALDO A RECEBER</p>
-                       {/* Saldo Principal - Fonte Grande */}
                        <p className="text-5xl lg:text-6xl font-mono italic text-green-400 font-black relative z-10 tracking-tighter whitespace-nowrap truncate">R$ {formatMoney(modalMember.saldoReal)}</p>
                     </div>
                     
@@ -549,7 +545,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                        <div className="bg-gradient-to-br from-blue-500/10 to-transparent border border-blue-500/20 p-6 rounded-[2rem] shadow-lg relative overflow-hidden group hover:border-blue-500/40 transition-all">
                           <div className="absolute top-4 right-4 text-blue-500/20 group-hover:scale-110 transition-transform"><Zap size={24}/></div>
                           <p className="text-[10px] font-black text-blue-400 mb-2 uppercase tracking-[0.2em] italic relative z-10">BÔNUS EXTRAS</p>
-                          {/* Fontes Secundárias Ajustadas para Caberem */}
                           <p className="text-xl lg:text-2xl font-mono text-blue-300 italic font-black relative z-10 whitespace-nowrap truncate">+R$ {formatMoney(modalMember.corridinhas)}</p>
                        </div>
                        
@@ -577,12 +572,14 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                     <h3 className="text-xl font-black uppercase italic text-zinc-600 flex items-center gap-4 mb-8 tracking-[0.2em]"><History size={22} className="text-yellow-400"/> EXTRATO RECENTE</h3>
                     <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin' }}>
                         {registros.filter(r => String(r.discordId) === String(modalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && r.criado_em.startsWith(mesAtualStr) && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).map((r: any) => (
-                          <div key={r.id} className="flex justify-between items-center bg-[#0a0a0a] p-6 rounded-[1.5rem] border border-white/5 hover:border-white/10 transition-all">
-                             <div>
-                                <p className={`font-black text-sm uppercase italic mb-1 ${r.tipo === 'CORRIDINHA' ? 'text-blue-400' : r.tipo === 'SAQUE' ? 'text-red-400' : 'text-white'}`}>{r.item || r.tipo}</p>
-                                <p className="text-[10px] text-zinc-600 tracking-widest uppercase mt-1 italic">{new Date(r.criado_em).toLocaleDateString('pt-BR')} • {r.cliente || 'SISTEMA'}</p>
+                          <div key={r.id} className="flex items-center bg-[#0a0a0a] p-6 rounded-[1.5rem] border border-white/5 hover:border-white/10 transition-all gap-4">
+                             <div className="min-w-0 flex-1">
+                                <p className={`font-black text-sm uppercase italic mb-1 truncate ${r.tipo === 'CORRIDINHA' ? 'text-blue-400' : r.tipo === 'SAQUE' ? 'text-red-400' : 'text-white'}`} title={r.item || r.tipo}>{r.item || r.tipo}</p>
+                                <p className="text-[10px] text-zinc-600 tracking-widest uppercase mt-1 italic truncate">{new Date(r.criado_em).toLocaleDateString('pt-BR')} • {r.cliente || 'SISTEMA'}</p>
                              </div>
-                             <p className={`font-mono text-lg font-black italic ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</p>
+                             <div className="flex-shrink-0 text-right">
+                                <p className={`font-mono text-lg font-black italic whitespace-nowrap ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</p>
+                             </div>
                           </div>
                         ))}
                     </div>
@@ -620,7 +617,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </div>
       )}
 
-      {/* FOOTER */}
       <footer className="fixed bottom-0 right-0 p-8 pointer-events-none opacity-10">
          <p className="text-[8px] font-black uppercase tracking-[1em] text-white italic">Coded by Zk • AFL OS Premium</p>
       </footer>
@@ -629,7 +625,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   );
 }
 
-// --- SUBCOMPONENTES VISUAIS ---
 function StatCard({ title, value, icon, type = "number", highlight = false }: any) {
   const displayValue = type === 'money' ? `R$ ${formatMoney(value)}` : value;
   return (
