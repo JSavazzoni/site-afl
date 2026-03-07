@@ -29,10 +29,9 @@ export async function GET() {
             return String(r.discordId) === String(m.discordId) && dataTexto.startsWith(mesAtualStr);
         });
 
-        // Bruto (Apenas vendas normais)
+        // Matemática Restaurada
         const bruto = regsMes.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a: any, r: any) => a + Number(r.valor || 0), 0);
         
-        // Caixa (Vendas Normais + Parcelas pagas no mês)
         const liqVendas = regsMes.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a: any, r: any) => a + Number(r.valorRecebido || 0), 0);
         const liqParcelas = regsMes.filter((r: any) => (r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a: any, r: any) => a + (Number(r.valor) || Number(r.valorRecebido) || 0), 0);
         const liq = liqVendas + liqParcelas;

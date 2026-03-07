@@ -68,7 +68,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     }
   }, [registros, mesBackup]);
 
-  // --- CÁLCULO DE DADOS PURO E BLINDADO (Igual a Auditoria) ---
+  // --- CÁLCULO DE DADOS RESTAURADO PARA O MODELO IDEAL ---
   const equipeProcessada = equipe.map(m => {
     const cargoReal = m.cargoPainel || m.cargo || 'Membro AFL';
     const perc = getCashback(cargoReal);
@@ -79,15 +79,20 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         r.criado_em && r.criado_em.startsWith(mesAtualStr)
     );
 
-    // Matemática 100% Baseada no Banco (Sem filtros ocultos)
-    const bruto = regsMes.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a, r) => a + (Number(r.valor) || 0), 0);
-    const liq = regsMes.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
-    const corridinhas = regsMes.filter(r => r.tipo === 'CORRIDINHA').reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
-    const pago = regsMes.filter(r => r.tipo === 'SAQUE').reduce((a, r) => a + (Number(r.valor) || 0), 0);
+    // BRUTO: Apenas vendas puras (Ignora as parcelas pagas e dívidas antigas)
+    const bruto = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valor) || 0), 0);
+    
+    // CAIXA DO MÊS: Vendas Puras + Dinheiro das Parcelas (Para você ver a grana real entrando)
+    const liqVendas = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
+    const liqParcelas = regsMes.filter(r => (r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valor) || Number(r.valorRecebido) || 0), 0);
+    const liq = liqVendas + liqParcelas;
 
-    // Saldo Real 100% Espelhado na Auditoria Vitalícia
+    const corridinhas = regsMes.filter(r => r.tipo === 'CORRIDINHA' && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
+    const pago = regsMes.filter(r => r.tipo === 'SAQUE' && !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')).reduce((a, r) => a + (Number(r.valor) || 0), 0);
+
+    // SALDO REAL: Lê da venda original e ignora a parcela para não duplicar
     const regsAtivos = registros.filter(r => String(r.discordId) === String(m.discordId) && r.status === 'APROVADO');
-    const ativoLiq = regsAtivos.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
+    const ativoLiq = regsAtivos.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
     const ativoExtra = regsAtivos.filter(r => r.tipo === 'CORRIDINHA').reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
     const ativoPago = regsAtivos.filter(r => r.tipo === 'SAQUE').reduce((a, r) => a + (Number(r.valor) || 0), 0);
     
@@ -104,13 +109,15 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   
   const muralMes = registros.filter(r => 
     (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
-    r.criado_em && r.criado_em.startsWith(mesAtualStr)
+    r.criado_em && r.criado_em.startsWith(mesAtualStr) &&
+    !(r.item || '').toUpperCase().includes('SALDO RETIDO') &&
+    !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')
   ).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
 
   const mesesDisponiveis = Array.from(new Set(registros.map(r => r.criado_em?.substring(0, 7)))).filter(Boolean).sort().reverse();
   const registrosDoMesBackup = registros.filter(r => r.criado_em?.startsWith(mesBackup));
-  const backupBruto = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+Number(r.valor), 0);
-  const backupLiquido = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+Number(r.valorRecebido), 0);
+  const backupBruto = registrosDoMesBackup.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a,r)=>a+Number(r.valor), 0);
+  const backupLiquido = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+(Number(r.valorRecebido) || Number(r.valor)), 0);
 
   // --- AÇÕES DO PAINEL ---
   const handleEnviar = async (e: any) => {
@@ -178,10 +185,16 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   return (
     <div className="flex min-h-screen bg-[#050505] text-white font-sans selection:bg-yellow-400 overflow-hidden">
       
+      {/* CSS GLOBAL DA SCROLLBAR BLINDADO */}
       <style dangerouslySetInnerHTML={{__html: `
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #050505; border-left: 1px solid rgba(255,255,255,0.02); }
-        ::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; }
+        /* Força todos os elementos do site a usarem barra escura */
+        html, body, * {
+          scrollbar-width: thin !important;
+          scrollbar-color: #3f3f46 transparent !important;
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #facc15; }
       `}} />
 
@@ -563,8 +576,9 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
                  <div className="space-y-6">
                     <h3 className="text-xl font-black uppercase italic text-zinc-600 flex items-center gap-4 mb-8 tracking-[0.2em]"><History size={22} className="text-yellow-400"/> EXTRATO RECENTE</h3>
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin' }}>
-                        {registros.filter(r => String(r.discordId) === String(modalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && r.criado_em.startsWith(mesAtualStr)).map((r: any) => (
+                    {/* AQUI A BARRA DE ROLAGEM TAMBÉM FOI BLINDADA */}
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 transparent' }}>
+                        {registros.filter(r => String(r.discordId) === String(modalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && r.criado_em.startsWith(mesAtualStr) && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).map((r: any) => (
                           <div key={r.id} className="flex items-center bg-[#0a0a0a] p-6 rounded-[1.5rem] border border-white/5 hover:border-white/10 transition-all gap-4">
                              <div className="min-w-0 flex-1">
                                 <p className={`font-black text-sm uppercase italic mb-1 truncate max-w-[200px] lg:max-w-xs ${r.tipo === 'CORRIDINHA' ? 'text-blue-400' : r.tipo === 'SAQUE' ? 'text-red-400' : 'text-white'}`} title={r.item || r.tipo}>{r.item || r.tipo}</p>
