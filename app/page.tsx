@@ -10,16 +10,11 @@ function ConteudoPrincipal() {
 
   // Se a pessoa tem login válido, mostra o painel.
   if (session) {
-    
-    // 👇👇 CHAVES DE ACESSO ADMIN 👇👇
-    // Substitua os textos abaixo pelos números reais de ID do Discord
-    const ID_DO_CARGO_ADMIN = "1474640962692321320"; 
-    const SEU_ID_PESSOAL = "327651890118524941";
-    
     const user = session?.user as any;
     
-    // A regra verifica se o usuário tem o cargo, ou se é você, ou se tem a tag isAdmin do banco
-    const ehAdmin = user?.cargo === ID_DO_CARGO_ADMIN || user?.id === SEU_ID_PESSOAL || user?.isAdmin === true;
+    // 👇 A MÁGICA AQUI: Libera acesso se o NextAuth já disse que é admin, 
+    // ou se o cargo dele bate com a sua variável de ambiente do cargo Admin.
+    const ehAdmin = user?.isAdmin === true || user?.cargo === process.env.NEXT_PUBLIC_DISCORD_ADMIN_ROLE_ID;
     
     return <Painel userSession={session} initialIsAdmin={ehAdmin} />;
   }
