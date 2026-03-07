@@ -1,25 +1,87 @@
 "use client";
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { signIn, useSession, SessionProvider } from "next-auth/react";
-import { UsersRound, Lock } from 'lucide-react';
+import { UsersRound, Lock, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import Painel from './Painel'; 
 
-// 1. O CONTEÚDO REAL DA PÁGINA (Com a verificação de login)
 function ConteudoPrincipal() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  
+  // Estados para controlar a Validação Ao Vivo
+  const [verificando, setVerificando] = useState(true);
+  const [autorizado, setAutorizado] = useState(false);
+  const [isUserAdmin, setIsUserAdmin] = useState(false);
 
-  // Se a pessoa tem login válido, mostra o painel.
-  if (session) {
-    const user = session?.user as any;
-    
-    // 👇 A MÁGICA AQUI: Libera acesso se o NextAuth já disse que é admin, 
-    // ou se o cargo dele bate com a sua variável de ambiente do cargo Admin.
-    const ehAdmin = user?.isAdmin === true || user?.cargo === process.env.NEXT_PUBLIC_DISCORD_ADMIN_ROLE_ID;
-    
-    return <Painel userSession={session} initialIsAdmin={ehAdmin} />;
+  useEffect(() => {
+    async function validarSeguranca() {
+      // Só faz a verificação se a pessoa passou do login do Discord
+      if (status === "authenticated" && session?.user) {
+        try {
+          const user = session.user as any;
+          const discordId = user.id; // Pega o ID único e imutável do Discord
+
+          // VALIDAÇÃO AO VIVO: Pergunta pro banco de dados quem é a equipe real agora
+          const res = await fetch('/api/equipe', { cache: 'no-store' });
+          
+          if (res.ok) {
+            const equipeDB = await res.json();
+            
+            // Procura se o cara que logou realmente existe na lista da sua equipe
+            const membroAtivo = equipeDB.find((m: any) => String(m.discordId) === String(discordId));
+
+            if (membroAtivo) {
+              // ✅ PASSOU NA SEGURANÇA: Ele está na equipe!
+              
+              // Puxa o cargo atualizado dele direto do banco pra evitar burlar pelo cookie
+              const cargoReal = membroAtivo.cargoPainel || membroAtivo.cargo || user.cargo;
+              
+              // Verifica se ele tem permissão de Admin (Pela Variável ou pelo nome do cargo)
+              const ehAdmin = cargoReal === process.env.NEXT_PUBLIC_DISCORD_ADMIN_ROLE_ID || 
+                              cargoReal === 'Master AFL' || 
+                              user.isAdmin === true;
+              
+              setIsUserAdmin(ehAdmin);
+              setAutorizado(true);
+            } else {
+              // ❌ BARRADO: Ele logou no Discord, mas NÃO é da equipe (Invasor ou Ex-membro)
+              setAutorizado(false);
+              router.push('/acesso-negado');
+            }
+          } else {
+            // Se a API falhar, bloqueia por segurança
+            router.push('/acesso-negado');
+          }
+        } catch (error) {
+          router.push('/acesso-negado');
+        } finally {
+          setVerificando(false);
+        }
+      } else if (status === "unauthenticated") {
+        // Se nem logado no Discord ele está, para de carregar e mostra a tela de login
+        setVerificando(false);
+      }
+    }
+
+    validarSeguranca();
+  }, [session, status, router]);
+
+  // 1. TELA DE CARREGAMENTO SEGURO (Enquanto checa o banco de dados)
+  if (status === "loading" || verificando) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <Loader2 className="animate-spin text-yellow-400" size={48} />
+      </div>
+    );
   }
 
-  // Se a pessoa não tem login, mostra a tela inicial linda.
+  // 2. TELA DO PAINEL (Acesso 100% Confirmado e Autorizado)
+  if (status === "authenticated" && autorizado) {
+    return <Painel userSession={session} initialIsAdmin={isUserAdmin} />;
+  }
+
+  // 3. TELA DE LOGIN (Não tem sessão ativa no navegador)
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden text-white selection:bg-yellow-400">
       
@@ -61,7 +123,7 @@ function ConteudoPrincipal() {
   );
 }
 
-// 2. A PÁGINA RAIZ 
+// O ENVELOPE DE SESSÃO
 export default function Page() {
   return (
     <SessionProvider>
