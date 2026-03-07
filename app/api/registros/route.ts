@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 export async function GET() {
   try {
     const registros = await prisma.registro.findMany({
-      where: { status: { in: ['APROVADO', 'PENDENTE', 'ARQUIVADO'] } },
+      where: { status: { in: ['APROVADO', 'ARQUIVADO', 'PENDENTE'] } },
       orderBy: { criado_em: 'desc' }
     });
     return NextResponse.json(registros);

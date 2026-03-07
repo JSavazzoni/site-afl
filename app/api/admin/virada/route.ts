@@ -10,21 +10,21 @@ export async function POST() {
     const membros = await prisma.membro.findMany();
     const registros = await prisma.registro.findMany({ where: { status: 'APROVADO' } });
 
+    // Salva o saldo de todo mundo
     for (const m of membros) {
-      // Ajuste para usar 'cargo' (Imagem 90b428)
-      const taxa = TAXAS[m.cargo] || 0.06;
+      const taxa = TAXAS[m.cargo || 'Membro AFL'] || 0.06;
       const rec = Number(m.valorRecebido) || 0;
       const extra = Number(m.cashbackExtra) || 0;
       const pago = Number(m.cashbackPago) || 0;
       const saldoRestante = Math.max(0, (rec * taxa) + extra - pago);
 
-      // Limpa os números do membro para o novo mês
+      // Zera o membro
       await prisma.membro.update({
         where: { discordId: m.discordId },
         data: { vendas: 0, valorRecebido: 0, recrutamentos: 0, cashbackPago: 0, cashbackExtra: 0 }
       });
 
-      // Cria o registro de Saldo (Removido nomeVendedor - Imagem 90b447)
+      // Cria a "Corridinha" de Saldo Retido
       if (saldoRestante > 0.01) {
         await prisma.registro.create({
           data: {
@@ -33,24 +33,18 @@ export async function POST() {
             tipo: 'CORRIDINHA',
             item: 'SALDO RETIDO (MÊS ANTERIOR)',
             cashbackExtra: Number(saldoRestante.toFixed(2)),
-            valor: 0,
-            valorRecebido: 0,
-            status: 'APROVADO',
-            cliente: 'SISTEMA AFL'
+            valor: 0, valorRecebido: 0, status: 'APROVADO', cliente: 'SISTEMA AFL'
           }
         });
       }
     }
 
-    // Arquiva os registros antigos
+    // Arquiva o passado
     for (const r of registros) {
-      await prisma.registro.update({
-        where: { id: r.id },
-        data: { status: 'ARQUIVADO' }
-      });
+      await prisma.registro.update({ where: { id: r.id }, data: { status: 'ARQUIVADO' } });
     }
 
-    return NextResponse.json({ success: true, message: "Mês virado com sucesso!" });
+    return NextResponse.json({ success: true });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

@@ -4,32 +4,29 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    // 1. Volta tudo o que foi "Arquivado" para "Aprovado" (Desfaz a virada burra)
-    await prisma.registro.updateMany({
-      where: { status: 'ARQUIVADO' },
-      data: { status: 'APROVADO' }
+    // 1. Puxa a verdade absoluta: todos os registros que contam dinheiro (Aprovados e Arquivados)
+    const registros = await prisma.registro.findMany({ 
+      where: { 
+        status: { in: ['APROVADO', 'ARQUIVADO'] } 
+      } 
     });
-
-    // 2. Apaga os registros de "Saldo Retido" duplicados que o sistema criou na virada
-    await prisma.registro.deleteMany({
-      where: { item: { contains: 'SALDO RETIDO' } }
-    });
-
-    const registros = await prisma.registro.findMany({
-      where: { status: 'APROVADO' }
-    });
+    
     const membros = await prisma.membro.findMany();
 
-    const relatorio = [];
-
+    // 2. Passa um pente fino membro por membro
     for (const membro of membros) {
-      const history = registros.filter(r => String(r.discordId) === String(membro.discordId));
+      // Pega todo o histórico de transações desse membro específico
+      const historico = registros.filter(r => String(r.discordId) === String(membro.discordId));
       
-      let vTot = 0; let vRec = 0; let vExtra = 0; let vPago = 0;
+      let vTot = 0; 
+      let vRec = 0; 
+      let vExtra = 0; 
+      let vPago = 0;
 
-      for (const r of history) {
+      // Faz a matemática do zero baseada nos registros puros
+      for (const r of historico) {
         if (r.tipo === 'VENDA' || !r.tipo) {
           vTot += Number(r.valor) || 0;
           vRec += Number(r.valorRecebido) || 0;
@@ -40,7 +37,7 @@ export async function GET(req: Request) {
         }
       }
 
-      // Atualiza o membro com a verdade absoluta do banco
+      // 3. Atualiza o banco de dados do membro com os valores cravados
       await prisma.membro.update({
         where: { discordId: membro.discordId },
         data: {
@@ -50,10 +47,9 @@ export async function GET(req: Request) {
           cashbackPago: vPago
         }
       });
-      relatorio.push({ nome: membro.nome, status: "RESTAURADO" });
     }
 
-    return NextResponse.json({ message: "SISTEMA RESTAURADO!", detalhes: relatorio });
+    return NextResponse.json({ message: "AUDITORIA CONCLUÍDA! Todos os saldos foram recalculados e alinhados perfeitamente." });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
