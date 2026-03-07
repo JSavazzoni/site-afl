@@ -68,7 +68,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     }
   }, [registros, mesBackup]);
 
-  // --- CÁLCULO DE DADOS BLINDADO ---
+  // --- CÁLCULO DE DADOS PURO E BLINDADO (Igual a Auditoria) ---
   const equipeProcessada = equipe.map(m => {
     const cargoReal = m.cargoPainel || m.cargo || 'Membro AFL';
     const perc = getCashback(cargoReal);
@@ -79,20 +79,15 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         r.criado_em && r.criado_em.startsWith(mesAtualStr)
     );
 
-    // BRUTO: Só vendas puras. Exclui dívidas antigas e logs de pagamento de parcela.
-    const bruto = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valor) || 0), 0);
-    
-    // CAIXA DO MÊS: Vendas Puras + Pagamentos de Parcelas soltas (A Mágica acontece aqui)
-    const liqVendas = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
-    const liqParcelas = regsMes.filter(r => (r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valor) || Number(r.valorRecebido) || 0), 0);
-    const liq = liqVendas + liqParcelas;
+    // Matemática 100% Baseada no Banco (Sem filtros ocultos)
+    const bruto = regsMes.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a, r) => a + (Number(r.valor) || 0), 0);
+    const liq = regsMes.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
+    const corridinhas = regsMes.filter(r => r.tipo === 'CORRIDINHA').reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
+    const pago = regsMes.filter(r => r.tipo === 'SAQUE').reduce((a, r) => a + (Number(r.valor) || 0), 0);
 
-    const corridinhas = regsMes.filter(r => r.tipo === 'CORRIDINHA' && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
-    const pago = regsMes.filter(r => r.tipo === 'SAQUE' && !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')).reduce((a, r) => a + (Number(r.valor) || 0), 0);
-
-    // SALDO REAL: Lê de toda a vida da pessoa, ignorando log de parcela para não duplicar, pois a venda original já é atualizada na parcela.
+    // Saldo Real 100% Espelhado na Auditoria Vitalícia
     const regsAtivos = registros.filter(r => String(r.discordId) === String(m.discordId) && r.status === 'APROVADO');
-    const ativoLiq = regsAtivos.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
+    const ativoLiq = regsAtivos.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
     const ativoExtra = regsAtivos.filter(r => r.tipo === 'CORRIDINHA').reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
     const ativoPago = regsAtivos.filter(r => r.tipo === 'SAQUE').reduce((a, r) => a + (Number(r.valor) || 0), 0);
     
@@ -109,15 +104,13 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   
   const muralMes = registros.filter(r => 
     (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
-    r.criado_em && r.criado_em.startsWith(mesAtualStr) &&
-    !(r.item || '').toUpperCase().includes('SALDO RETIDO') &&
-    !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')
+    r.criado_em && r.criado_em.startsWith(mesAtualStr)
   ).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
 
   const mesesDisponiveis = Array.from(new Set(registros.map(r => r.criado_em?.substring(0, 7)))).filter(Boolean).sort().reverse();
   const registrosDoMesBackup = registros.filter(r => r.criado_em?.startsWith(mesBackup));
-  const backupBruto = registrosDoMesBackup.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a,r)=>a+Number(r.valor), 0);
-  const backupLiquido = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+(Number(r.valorRecebido) || Number(r.valor)), 0);
+  const backupBruto = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+Number(r.valor), 0);
+  const backupLiquido = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+Number(r.valorRecebido), 0);
 
   // --- AÇÕES DO PAINEL ---
   const handleEnviar = async (e: any) => {
@@ -138,7 +131,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     const res = await fetch('/api/registros', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (res.ok) {
       setForm({ tipo: 'VENDA', vendedorId: '', cliente: '', item: '', valor: '', valorRecebido: '', recrutadoId: '', dataVencimento: '', membroSaqueId: '' });
-      showToast("REGISTRO POSTADO!");
+      showToast("REGISTRO POSTADO COM SUCESSO!");
       pulse();
     }
     setLoading(false);
@@ -331,7 +324,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                                 {r.tipo || 'VENDA'}
                             </span>
                          </td>
-                         <td className="px-8 py-5 text-zinc-400 italic text-xs truncate max-w-xs">{r.cliente || r.item || '-'}</td>
+                         <td className="px-8 py-5 text-zinc-400 italic text-xs max-w-[250px] truncate">{r.cliente || r.item || '-'}</td>
                          <td className={`px-8 py-5 font-mono text-sm text-right whitespace-nowrap ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
                          <td className="px-8 py-5 text-zinc-600 text-[10px] text-right">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
                        </tr>
@@ -415,8 +408,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                      <h4 className="text-2xl text-white italic font-black uppercase mb-2 truncate tracking-tighter">{r.nome}</h4>
                      <p className="text-yellow-400 text-[10px] font-black uppercase mb-6 tracking-[0.2em] bg-yellow-400/10 inline-block px-3 py-1.5 rounded-lg">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</p>
                      <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
-                        <p>CLIENTE: <span className="text-zinc-300 truncate">{r.cliente}</span></p>
-                        <p className="truncate">ITEM: <span className="text-zinc-300">{r.item}</span></p>
+                        <p>CLIENTE: <span className="text-zinc-300 truncate inline-block max-w-[150px] align-bottom">{r.cliente}</span></p>
+                        <p>ITEM: <span className="text-zinc-300 truncate inline-block max-w-[150px] align-bottom">{r.item}</span></p>
                      </div>
                   </div>
                   <div className="flex gap-3">
@@ -571,10 +564,10 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                  <div className="space-y-6">
                     <h3 className="text-xl font-black uppercase italic text-zinc-600 flex items-center gap-4 mb-8 tracking-[0.2em]"><History size={22} className="text-yellow-400"/> EXTRATO RECENTE</h3>
                     <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin' }}>
-                        {registros.filter(r => String(r.discordId) === String(modalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && r.criado_em.startsWith(mesAtualStr) && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).map((r: any) => (
+                        {registros.filter(r => String(r.discordId) === String(modalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && r.criado_em.startsWith(mesAtualStr)).map((r: any) => (
                           <div key={r.id} className="flex items-center bg-[#0a0a0a] p-6 rounded-[1.5rem] border border-white/5 hover:border-white/10 transition-all gap-4">
                              <div className="min-w-0 flex-1">
-                                <p className={`font-black text-sm uppercase italic mb-1 truncate ${r.tipo === 'CORRIDINHA' ? 'text-blue-400' : r.tipo === 'SAQUE' ? 'text-red-400' : 'text-white'}`} title={r.item || r.tipo}>{r.item || r.tipo}</p>
+                                <p className={`font-black text-sm uppercase italic mb-1 truncate max-w-[200px] lg:max-w-xs ${r.tipo === 'CORRIDINHA' ? 'text-blue-400' : r.tipo === 'SAQUE' ? 'text-red-400' : 'text-white'}`} title={r.item || r.tipo}>{r.item || r.tipo}</p>
                                 <p className="text-[10px] text-zinc-600 tracking-widest uppercase mt-1 italic truncate">{new Date(r.criado_em).toLocaleDateString('pt-BR')} • {r.cliente || 'SISTEMA'}</p>
                              </div>
                              <div className="flex-shrink-0 text-right">
@@ -616,10 +609,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
            </div>
         </div>
       )}
-
-      <footer className="fixed bottom-0 right-0 p-8 pointer-events-none opacity-10">
-         <p className="text-[8px] font-black uppercase tracking-[1em] text-white italic">Coded by Zk • AFL OS Premium</p>
-      </footer>
 
     </div>
   );
