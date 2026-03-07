@@ -1,9 +1,30 @@
 "use client";
 import React from 'react';
-import { signIn } from "next-auth/react";
+import { signIn, useSession, SessionProvider } from "next-auth/react";
 import { UsersRound, Lock } from 'lucide-react';
+import Painel from './Painel'; 
 
-export default function LoginScreen() {
+// 1. O CONTEÚDO REAL DA PÁGINA (Com a verificação de login)
+function ConteudoPrincipal() {
+  const { data: session } = useSession();
+
+  // Se a pessoa tem login válido, mostra o painel.
+  if (session) {
+    
+    // 👇👇 CHAVES DE ACESSO ADMIN 👇👇
+    // Substitua os textos abaixo pelos números reais de ID do Discord
+    const ID_DO_CARGO_ADMIN = "1474640962692321320"; 
+    const SEU_ID_PESSOAL = "327651890118524941";
+    
+    const user = session?.user as any;
+    
+    // A regra verifica se o usuário tem o cargo, ou se é você, ou se tem a tag isAdmin do banco
+    const ehAdmin = user?.cargo === ID_DO_CARGO_ADMIN || user?.id === SEU_ID_PESSOAL || user?.isAdmin === true;
+    
+    return <Painel userSession={session} initialIsAdmin={ehAdmin} />;
+  }
+
+  // Se a pessoa não tem login, mostra a tela inicial linda.
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden text-white selection:bg-yellow-400">
       
@@ -32,7 +53,7 @@ export default function LoginScreen() {
         </button>
       </main>
 
-      {/* FOOTER DESENVOLVIDO POR VZ */}
+      {/* FOOTER DA TELA DE LOGIN */}
       <footer className="absolute bottom-8 flex flex-col items-center pointer-events-none opacity-40">
          <p className="text-[8px] md:text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500 italic mb-2 text-center">
             © {new Date().getFullYear()} AFL PAINEL • TODOS OS DIREITOS RESERVADOS
@@ -42,5 +63,14 @@ export default function LoginScreen() {
          </p>
       </footer>
     </div>
+  );
+}
+
+// 2. A PÁGINA RAIZ 
+export default function Page() {
+  return (
+    <SessionProvider>
+      <ConteudoPrincipal />
+    </SessionProvider>
   );
 }

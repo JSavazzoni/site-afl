@@ -196,7 +196,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   return (
     <div className="flex min-h-screen bg-[#050505] text-white font-sans selection:bg-yellow-400 overflow-hidden">
       
-      {/* CSS DA SCROLLBAR GLOBAL */}
       <style dangerouslySetInnerHTML={{__html: `
         html, body, * {
           scrollbar-width: thin !important;
@@ -254,283 +253,297 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
       </aside>
 
       {/* ÁREA PRINCIPAL */}
-      <main className="flex-1 p-10 lg:p-14 overflow-y-auto bg-[#050505] relative">
-        <header className="mb-14 flex justify-between items-end border-b border-white/5 pb-8">
-          <div>
-            <h2 className="text-4xl lg:text-5xl font-black uppercase italic tracking-tighter leading-none text-white">
-                {activeTab === 'inicio' ? "VISÃO GERAL" : activeTab === 'admin_zone' ? "ZONA ADMIN" : activeTab.replace('_', ' ')}
-            </h2>
-            <div className="h-1.5 w-24 bg-yellow-400 mt-6 shadow-[0_0_20px_#facc15]"></div>
-          </div>
-          <div className="flex items-center gap-4 bg-[#0a0a0a] p-3 pl-5 rounded-[1.5rem] border border-white/5 shadow-md">
-             <div className="text-right">
-                <p className="text-xs font-black uppercase italic text-white tracking-tight">{userSession?.user?.name}</p>
-                <p className="text-[9px] font-bold text-yellow-400 uppercase tracking-[0.2em] mt-1 opacity-80">{isAdmin ? 'ADMINISTRADOR' : 'AGENTE AFL'}</p>
-             </div>
-             <img src={userSession?.user?.image || `https://ui-avatars.com/api/?name=${userSession?.user?.name}&background=EAB308&color=000&bold=true`} className="w-12 h-12 rounded-[1rem] border-2 border-yellow-400/30 shadow-md" alt="" />
-          </div>
-        </header>
+      <main className="flex-1 overflow-y-auto bg-[#050505] relative flex flex-col">
+        {/* CONTEÚDO PRINCIPAL COM PADDING */}
+        <div className="p-10 lg:p-14 flex-1">
+            <header className="mb-14 flex justify-between items-end border-b border-white/5 pb-8">
+            <div>
+                <h2 className="text-4xl lg:text-5xl font-black uppercase italic tracking-tighter leading-none text-white">
+                    {activeTab === 'inicio' ? "VISÃO GERAL" : activeTab === 'admin_zone' ? "ZONA ADMIN" : activeTab.replace('_', ' ')}
+                </h2>
+                <div className="h-1.5 w-24 bg-yellow-400 mt-6 shadow-[0_0_20px_#facc15]"></div>
+            </div>
+            <div className="flex items-center gap-4 bg-[#0a0a0a] p-3 pl-5 rounded-[1.5rem] border border-white/5 shadow-md">
+                <div className="text-right">
+                    <p className="text-xs font-black uppercase italic text-white tracking-tight">{userSession?.user?.name}</p>
+                    <p className="text-[9px] font-bold text-yellow-400 uppercase tracking-[0.2em] mt-1 opacity-80">{isAdmin ? 'ADMINISTRADOR' : 'AGENTE AFL'}</p>
+                </div>
+                <img src={userSession?.user?.image || `https://ui-avatars.com/api/?name=${userSession?.user?.name}&background=EAB308&color=000&bold=true`} className="w-12 h-12 rounded-[1rem] border-2 border-yellow-400/30 shadow-md" alt="" />
+            </div>
+            </header>
 
-        {/* DASHBOARD */}
-        {activeTab === 'inicio' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 animate-in fade-in slide-in-from-bottom-6 duration-500">
-             <StatCard title="VALOR BRUTO (MÊS)" value={equipeProcessada.reduce((a,m)=>a+m.bruto,0)} icon={<TrendingUp size={32}/>} type="money" />
-             <StatCard title="VALOR LÍQUIDO (CAIXA)" value={equipeProcessada.reduce((a,m)=>a+m.liq,0)} icon={<Zap size={32}/>} type="money" highlight />
-             <StatCard title="MEMBROS ATIVOS" value={equipe.length} icon={<Users size={32}/>} />
-          </div>
-        )}
+            {/* DASHBOARD */}
+            {activeTab === 'inicio' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 animate-in fade-in slide-in-from-bottom-6 duration-500">
+                <StatCard title="VALOR BRUTO (MÊS)" value={equipeProcessada.reduce((a,m)=>a+m.bruto,0)} icon={<TrendingUp size={32}/>} type="money" />
+                <StatCard title="VALOR LÍQUIDO (CAIXA)" value={equipeProcessada.reduce((a,m)=>a+m.liq,0)} icon={<Zap size={32}/>} type="money" highlight />
+                <StatCard title="MEMBROS ATIVOS" value={equipe.length} icon={<Users size={32}/>} />
+            </div>
+            )}
 
-        {/* RANKING */}
-        {activeTab === 'ranking' && (
-          <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl animate-in fade-in duration-500">
-             <table className="w-full text-left font-black uppercase">
-               <thead className="bg-yellow-400 text-black text-[11px] tracking-[0.2em]">
-                 <tr><th className="px-8 py-5">RANK</th><th className="px-8 py-5 text-center">AGENTE</th><th className="px-8 py-5 text-right">PRODUÇÃO (MÊS)</th></tr>
-               </thead>
-               <tbody className="divide-y divide-white/5">
-                 {equipeProcessada.map((m, i) => (
-                   <tr key={m.discordId} className="hover:bg-white/[0.02] transition-all group">
-                     <td className="px-8 py-6 italic text-3xl text-zinc-700 group-hover:text-yellow-400/30 transition-colors w-24">{i + 1}º</td>
-                     <td className="px-8 py-6 flex items-center justify-center gap-4 text-lg text-white italic tracking-tight"><img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000&bold=true`} className="w-10 h-10 rounded-xl" alt=""/> {m.nome}</td>
-                     <td className="px-8 py-6 text-right text-yellow-400 text-2xl font-mono italic">R$ {formatMoney(m.bruto)}</td>
-                   </tr>
-                 ))}
-               </tbody>
-             </table>
-          </div>
-        )}
+            {/* RANKING */}
+            {activeTab === 'ranking' && (
+            <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl animate-in fade-in duration-500">
+                <table className="w-full text-left font-black uppercase">
+                <thead className="bg-yellow-400 text-black text-[11px] tracking-[0.2em]">
+                    <tr><th className="px-8 py-5">RANK</th><th className="px-8 py-5 text-center">AGENTE</th><th className="px-8 py-5 text-right">PRODUÇÃO (MÊS)</th></tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                    {equipeProcessada.map((m, i) => (
+                    <tr key={m.discordId} className="hover:bg-white/[0.02] transition-all group">
+                        <td className="px-8 py-6 italic text-3xl text-zinc-700 group-hover:text-yellow-400/30 transition-colors w-24">{i + 1}º</td>
+                        <td className="px-8 py-6 flex items-center justify-center gap-4 text-lg text-white italic tracking-tight"><img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000&bold=true`} className="w-10 h-10 rounded-xl" alt=""/> {m.nome}</td>
+                        <td className="px-8 py-6 text-right text-yellow-400 text-2xl font-mono italic">R$ {formatMoney(m.bruto)}</td>
+                    </tr>
+                    ))}
+                </tbody>
+                </table>
+            </div>
+            )}
 
-        {/* EFETIVO */}
-        {activeTab === 'equipe' && (
-          <div className="animate-in fade-in duration-500">
-             <div className="flex gap-3 mb-8 overflow-x-auto pb-4 no-scrollbar">
-                {['Todos', ...HIERARQUIA].map(c => (
-                  <button key={c} onClick={() => setSelectedCargo(c)} className={`px-6 py-3 rounded-full text-[11px] font-black uppercase transition-all whitespace-nowrap tracking-widest ${selectedCargo === c ? 'bg-yellow-400 text-black shadow-[0_0_15px_rgba(250,204,21,0.3)]' : 'bg-[#0a0a0a] text-zinc-500 border border-white/5 hover:text-white hover:bg-white/5'}`}>{c}</button>
-                ))}
-             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                {equipeFiltrada.map(m => (
-                  <div key={m.discordId} onClick={() => setMembroSelecionado(m)} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-white/5 hover:border-yellow-400/40 cursor-pointer shadow-lg group transition-all hover:-translate-y-1">
-                    <div className="flex items-center gap-5 mb-6">
-                        <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000&bold=true`} className="w-16 h-16 rounded-[1.2rem] border-2 border-zinc-800 group-hover:border-yellow-400 transition-colors shadow-md" alt="" />
-                        <div className="flex-1 min-w-0">
-                            <h4 className="font-black uppercase text-white text-xl truncate tracking-tight">{m.nome}</h4>
-                            <p className="text-[9px] text-yellow-400 font-bold mt-1 italic tracking-[0.2em] opacity-90 truncate">{m.cargoReal}</p>
+            {/* EFETIVO */}
+            {activeTab === 'equipe' && (
+            <div className="animate-in fade-in duration-500">
+                <div className="flex gap-3 mb-8 overflow-x-auto pb-4 no-scrollbar">
+                    {['Todos', ...HIERARQUIA].map(c => (
+                    <button key={c} onClick={() => setSelectedCargo(c)} className={`px-6 py-3 rounded-full text-[11px] font-black uppercase transition-all whitespace-nowrap tracking-widest ${selectedCargo === c ? 'bg-yellow-400 text-black shadow-[0_0_15px_rgba(250,204,21,0.3)]' : 'bg-[#0a0a0a] text-zinc-500 border border-white/5 hover:text-white hover:bg-white/5'}`}>{c}</button>
+                    ))}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                    {equipeFiltrada.map(m => (
+                    <div key={m.discordId} onClick={() => setMembroSelecionado(m)} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-white/5 hover:border-yellow-400/40 cursor-pointer shadow-lg group transition-all hover:-translate-y-1">
+                        <div className="flex items-center gap-5 mb-6">
+                            <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000&bold=true`} className="w-16 h-16 rounded-[1.2rem] border-2 border-zinc-800 group-hover:border-yellow-400 transition-colors shadow-md" alt="" />
+                            <div className="flex-1 min-w-0">
+                                <h4 className="font-black uppercase text-white text-xl truncate tracking-tight">{m.nome}</h4>
+                                <p className="text-[9px] text-yellow-400 font-bold mt-1 italic tracking-[0.2em] opacity-90 truncate">{m.cargoReal}</p>
+                            </div>
+                        </div>
+                        
+                        <div className="pt-6 border-t border-white/5 space-y-3 text-[10px] font-black uppercase tracking-widest">
+                        <div className="flex justify-between text-zinc-500"><span>BRUTO:</span><span className="text-white font-mono text-sm">R$ {formatMoney(m.bruto)}</span></div>
+                        <div className="flex justify-between text-green-500/80"><span>LÍQUIDO:</span><span className="text-green-400 font-mono text-sm">R$ {formatMoney(m.liq)}</span></div>
+                        <div className="flex justify-between text-yellow-400 bg-yellow-400/5 px-3 py-3 rounded-xl mt-4 border border-yellow-400/10 items-center"><span>SALDO:</span><span className="font-mono text-base">R$ {formatMoney(m.saldoReal)}</span></div>
                         </div>
                     </div>
-                    
-                    <div className="pt-6 border-t border-white/5 space-y-3 text-[10px] font-black uppercase tracking-widest">
-                       <div className="flex justify-between text-zinc-500"><span>BRUTO:</span><span className="text-white font-mono text-sm">R$ {formatMoney(m.bruto)}</span></div>
-                       <div className="flex justify-between text-green-500/80"><span>LÍQUIDO:</span><span className="text-green-400 font-mono text-sm">R$ {formatMoney(m.liq)}</span></div>
-                       <div className="flex justify-between text-yellow-400 bg-yellow-400/5 px-3 py-3 rounded-xl mt-4 border border-yellow-400/10 items-center"><span>SALDO:</span><span className="font-mono text-base">R$ {formatMoney(m.saldoReal)}</span></div>
+                    ))}
+                </div>
+            </div>
+            )}
+
+            {/* MURAL */}
+            {activeTab === 'gestao' && (
+            <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl animate-in fade-in duration-500">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
+                    <thead className="bg-white/5 text-zinc-500 border-b border-white/5">
+                        <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5">CLIENTE / ITEM</th><th className="px-8 py-5 text-right">VALOR</th><th className="px-8 py-5 text-right">DATA</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {muralMes.map((r: any) => (
+                        <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
+                            <td className="px-8 py-5 text-white text-xs italic group-hover:text-yellow-400 transition-colors">{r.nome}</td>
+                            <td className="px-8 py-5">
+                                <span className={`px-3 py-1.5 rounded-lg text-[9px] border ${r.tipo === 'SAQUE' ? 'text-red-500 border-red-500/20 bg-red-500/5' : r.tipo === 'CORRIDINHA' ? 'text-blue-400 border-blue-400/20 bg-blue-400/5' : 'text-yellow-400 border-yellow-400/20 bg-yellow-400/5'}`}>
+                                    {r.tipo || 'VENDA'}
+                                </span>
+                            </td>
+                            <td className="px-8 py-5 text-zinc-400 italic text-xs max-w-[250px] truncate">{formatClientName(r)} | {formatItemName(r)}</td>
+                            <td className={`px-8 py-5 font-mono text-sm text-right whitespace-nowrap ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
+                            <td className="px-8 py-5 text-zinc-600 text-[10px] text-right">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
+                        </tr>
+                        ))}
+                    </tbody>
+                    </table>
+                </div>
+            </div>
+            )}
+
+            {/* POSTAR */}
+            {activeTab === 'registrar' && (
+            <div className="max-w-3xl mx-auto animate-in zoom-in-95 duration-300">
+                <div className="flex gap-2 p-1.5 bg-[#0a0a0a] rounded-[1.5rem] mb-8 border border-white/5 shadow-lg">
+                    {[{id:'VENDA', label:'VENDA', icon:<ShoppingCart size={16}/>}, {id:'CORRIDINHA', label:'BÔNUS', icon:<Zap size={16}/>}, {id:'SAQUE', label:'PAGAMENTO', icon:<Banknote size={16}/>}].map(t => (
+                    <button key={t.id} onClick={() => setForm({...form, tipo: t.id})} className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-[11px] font-black tracking-[0.2em] transition-all ${form.tipo === t.id ? 'bg-yellow-400 text-black shadow-md' : 'text-zinc-600 hover:text-white'}`}>{t.icon}{t.label}</button>
+                    ))}
+                </div>
+                <form onSubmit={handleEnviar} className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl space-y-6">
+                    <div className="space-y-3">
+                    <label className="text-[11px] uppercase text-yellow-400 font-black tracking-widest ml-3">AGENTE RESPONSÁVEL</label>
+                    <select value={form.vendedorId || form.recrutadoId || form.membroSaqueId} onChange={e => setForm({...form, vendedorId: e.target.value, recrutadoId: e.target.value, membroSaqueId: e.target.value})} className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-yellow-400 font-black uppercase text-sm appearance-none cursor-pointer shadow-inner" required>
+                        <option value="">Selecione na equipe...</option>
+                        {equipeProcessada.map(m => <option key={m.discordId} value={m.discordId}>{m.nome} ({m.cargoReal})</option>)}
+                    </select>
                     </div>
-                  </div>
-                ))}
-             </div>
-          </div>
-        )}
+                    
+                    {form.tipo === 'VENDA' && (
+                    <div className="space-y-6 animate-in fade-in duration-500">
+                        <InputField label="CLIENTE (NOME / ID)" value={form.cliente} onChange={(v:any)=>setForm({...form, cliente: v})} placeholder="Ex: Lucas | 4116" />
+                        <InputField label="ITEM COMPRADO" value={form.item} onChange={(v:any)=>setForm({...form, item: v})} placeholder="Ex: Farm de Dinheiro" />
+                        <div className="grid grid-cols-2 gap-5">
+                        <InputField label="VALOR TOTAL (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="0,00" />
+                        <InputField label="VALOR RECEBIDO (R$)" type="number" value={form.valorRecebido} onChange={(v:any)=>setForm({...form, valorRecebido: v})} placeholder="0,00" />
+                        </div>
+                        <InputField label="DATA VENCIMENTO (OPCIONAL)" type="date" value={form.dataVencimento} onChange={(v:any)=>setForm({...form, dataVencimento: v})} required={false} />
+                    </div>
+                    )}
 
-        {/* MURAL */}
-        {activeTab === 'gestao' && (
-           <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl animate-in fade-in duration-500">
-              <div className="overflow-x-auto">
-                 <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
-                   <thead className="bg-white/5 text-zinc-500 border-b border-white/5">
-                     <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5">CLIENTE / ITEM</th><th className="px-8 py-5 text-right">VALOR</th><th className="px-8 py-5 text-right">DATA</th></tr>
-                   </thead>
-                   <tbody className="divide-y divide-white/5">
-                     {muralMes.map((r: any) => (
-                       <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
-                         <td className="px-8 py-5 text-white text-xs italic group-hover:text-yellow-400 transition-colors">{r.nome}</td>
-                         <td className="px-8 py-5">
-                            <span className={`px-3 py-1.5 rounded-lg text-[9px] border ${r.tipo === 'SAQUE' ? 'text-red-500 border-red-500/20 bg-red-500/5' : r.tipo === 'CORRIDINHA' ? 'text-blue-400 border-blue-400/20 bg-blue-400/5' : 'text-yellow-400 border-yellow-400/20 bg-yellow-400/5'}`}>
-                                {r.tipo || 'VENDA'}
-                            </span>
-                         </td>
-                         <td className="px-8 py-5 text-zinc-400 italic text-xs max-w-[250px] truncate">{formatClientName(r)} | {formatItemName(r)}</td>
-                         <td className={`px-8 py-5 font-mono text-sm text-right whitespace-nowrap ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
-                         <td className="px-8 py-5 text-zinc-600 text-[10px] text-right">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
-              </div>
-           </div>
-        )}
+                    {form.tipo === 'CORRIDINHA' && <div className="animate-in slide-in-from-top-4 duration-300"><InputField label="VALOR DO BÔNUS (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="Ex: 50,00" /></div>}
+                    {form.tipo === 'SAQUE' && <div className="animate-in slide-in-from-top-4 duration-300"><InputField label="DINHEIRO TRANSFERIDO (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="Valor pago no Pix" /></div>}
 
-        {/* POSTAR */}
-        {activeTab === 'registrar' && (
-          <div className="max-w-3xl mx-auto animate-in zoom-in-95 duration-300">
-             <div className="flex gap-2 p-1.5 bg-[#0a0a0a] rounded-[1.5rem] mb-8 border border-white/5 shadow-lg">
-                {[{id:'VENDA', label:'VENDA', icon:<ShoppingCart size={16}/>}, {id:'CORRIDINHA', label:'BÔNUS', icon:<Zap size={16}/>}, {id:'SAQUE', label:'PAGAMENTO', icon:<Banknote size={16}/>}].map(t => (
-                  <button key={t.id} onClick={() => setForm({...form, tipo: t.id})} className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-[11px] font-black tracking-[0.2em] transition-all ${form.tipo === t.id ? 'bg-yellow-400 text-black shadow-md' : 'text-zinc-600 hover:text-white'}`}>{t.icon}{t.label}</button>
+                    <button disabled={loading} className="w-full bg-yellow-400 text-black font-black py-5 rounded-2xl uppercase tracking-[0.3em] text-sm shadow-lg mt-8 hover:bg-yellow-300 transition-all active:scale-95">
+                    {loading ? 'PROCESSANDO...' : 'ENVIAR REGISTRO'}
+                    </button>
+                </form>
+            </div>
+            )}
+
+            {/* PENDENCIAS */}
+            {activeTab === 'pendencias' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
+                {pendencias.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Nenhuma cobrança ativa</p></div>}
+                {pendencias.map(r => (
+                <div key={r.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-red-500/20 shadow-lg flex flex-col justify-between group relative overflow-hidden transition-all hover:border-red-500/40 hover:-translate-y-1">
+                    <div className="absolute -top-4 -right-4 p-6 text-red-500/5 group-hover:text-red-500/10 transition-colors"><AlertCircle size={80}/></div>
+                    <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-6">
+                        <h4 className="text-2xl text-white italic font-black uppercase truncate pr-4 tracking-tighter">{formatClientName(r)}</h4>
+                        <span className="bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-black tracking-widest shadow-md whitespace-nowrap flex-shrink-0 ml-2">FALTA R$ {formatMoney(Number(r.valor) - Number(r.valorRecebido))}</span>
+                        </div>
+                        <div className="space-y-2 mb-8 text-[11px] font-black uppercase text-zinc-500 tracking-widest">
+                        <p>AGENTE: <span className="text-zinc-100 ml-2">{r.nome}</span></p>
+                        <p>PRODUTO: <span className="text-zinc-100 ml-2 truncate inline-block max-w-[150px] align-bottom">{formatItemName(r)}</span></p>
+                        <p className="mt-4 pt-2">VENCIMENTO: <span className="text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-md border border-yellow-400/20">{r.dataVencimento?.split('-').reverse().join('/') || 'A COMBINAR'}</span></p>
+                        </div>
+                    </div>
+                    <button onClick={() => setModalParcela(r)} className="w-full bg-green-500 text-black font-black py-4 rounded-xl uppercase text-[11px] tracking-widest hover:bg-green-400 shadow-md relative z-10 transition-all active:scale-95">RECEBER PAGAMENTO</button>
+                </div>
                 ))}
-             </div>
-             <form onSubmit={handleEnviar} className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl space-y-6">
-                <div className="space-y-3">
-                  <label className="text-[11px] uppercase text-yellow-400 font-black tracking-widest ml-3">AGENTE RESPONSÁVEL</label>
-                  <select value={form.vendedorId || form.recrutadoId || form.membroSaqueId} onChange={e => setForm({...form, vendedorId: e.target.value, recrutadoId: e.target.value, membroSaqueId: e.target.value})} className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-yellow-400 font-black uppercase text-sm appearance-none cursor-pointer shadow-inner" required>
-                    <option value="">Selecione na equipe...</option>
-                    {equipeProcessada.map(m => <option key={m.discordId} value={m.discordId}>{m.nome} ({m.cargoReal})</option>)}
-                  </select>
+            </div>
+            )}
+
+            {/* APROVACOES */}
+            {activeTab === 'admin' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
+                {aguardando.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Fila limpa</p></div>}
+                {aguardando.map(r => (
+                <div key={r.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-yellow-400/20 shadow-lg flex flex-col justify-between">
+                    <div>
+                        <h4 className="text-2xl text-white italic font-black uppercase mb-2 truncate tracking-tighter">{r.nome}</h4>
+                        <p className="text-yellow-400 text-[10px] font-black uppercase mb-6 tracking-[0.2em] bg-yellow-400/10 inline-block px-3 py-1.5 rounded-lg">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</p>
+                        <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
+                            <p>CLIENTE: <span className="text-zinc-300 truncate inline-block max-w-[150px] align-bottom">{formatClientName(r)}</span></p>
+                            <p className="truncate">ITEM: <span className="text-zinc-300">{formatItemName(r)}</span></p>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <button onClick={() => decidir(r.id, 'APROVAR')} className="flex-1 bg-yellow-400 text-black font-black py-3.5 rounded-xl uppercase text-[10px] hover:bg-yellow-300 shadow-md transition-all">APROVAR</button>
+                        <button onClick={() => decidir(r.id, 'REPROVAR')} className="px-5 py-3.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl hover:bg-red-500 hover:text-white transition-all"><X size={18}/></button>
+                    </div>
+                </div>
+                ))}
+            </div>
+            )}
+
+            {/* ADMIN ZONE */}
+            {activeTab === 'admin_zone' && (
+            <div className="space-y-10 animate-in fade-in duration-500">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="bg-red-500/5 border border-red-500/20 p-10 rounded-[2.5rem] shadow-lg relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-8 text-red-500/5"><Archive size={80}/></div>
+                    <h3 className="text-3xl font-black italic text-white mb-4 tracking-tighter">VIRADA DE MÊS</h3>
+                    <p className="text-zinc-500 mb-8 text-xs font-bold uppercase tracking-widest leading-relaxed">Arquiva as vendas e zera contadores. USE APENAS NO DIA 1º.</p>
+                    <button onClick={virarMes} disabled={loading} className="w-full bg-red-600 text-white font-black py-4 rounded-xl uppercase text-xs shadow-md hover:bg-red-500 transition-all active:scale-95">EXECUTAR VIRADA</button>
+                    </div>
+
+                    <div className="bg-purple-500/5 border border-purple-500/20 p-10 rounded-[2.5rem] shadow-lg relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-8 text-purple-500/5"><Database size={80}/></div>
+                    <h3 className="text-3xl font-black italic text-white mb-4 tracking-tighter">RESTAURAR SISTEMA</h3>
+                    <p className="text-zinc-500 mb-8 text-xs font-bold uppercase tracking-widest leading-relaxed">Desfaz erro da virada precoce. Volta as vendas para o Painel.</p>
+                    <button onClick={forcarAuditoria} disabled={loading} className="w-full bg-purple-600 text-white font-black py-4 rounded-xl uppercase text-xs shadow-md hover:bg-purple-500 transition-all active:scale-95">RESTAURAR VENDAS</button>
+                    </div>
                 </div>
                 
-                {form.tipo === 'VENDA' && (
-                  <div className="space-y-6 animate-in fade-in duration-500">
-                    <InputField label="CLIENTE (NOME / ID)" value={form.cliente} onChange={(v:any)=>setForm({...form, cliente: v})} placeholder="Ex: Lucas | 4116" />
-                    <InputField label="ITEM COMPRADO" value={form.item} onChange={(v:any)=>setForm({...form, item: v})} placeholder="Ex: Farm de Dinheiro" />
-                    <div className="grid grid-cols-2 gap-5">
-                      <InputField label="VALOR TOTAL (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="0,00" />
-                      <InputField label="VALOR RECEBIDO (R$)" type="number" value={form.valorRecebido} onChange={(v:any)=>setForm({...form, valorRecebido: v})} placeholder="0,00" />
+                <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-xl">
+                    <div className="p-6 px-8 border-b border-white/5 flex justify-between items-center">
+                        <h4 className="font-black italic text-zinc-500 uppercase tracking-[0.3em] text-[11px]">LOGS DE DADOS</h4>
                     </div>
-                    <InputField label="DATA VENCIMENTO (OPCIONAL)" type="date" value={form.dataVencimento} onChange={(v:any)=>setForm({...form, dataVencimento: v})} required={false} />
-                  </div>
-                )}
-
-                {form.tipo === 'CORRIDINHA' && <div className="animate-in slide-in-from-top-4 duration-300"><InputField label="VALOR DO BÔNUS (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="Ex: 50,00" /></div>}
-                {form.tipo === 'SAQUE' && <div className="animate-in slide-in-from-top-4 duration-300"><InputField label="DINHEIRO TRANSFERIDO (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="Valor pago no Pix" /></div>}
-
-                <button disabled={loading} className="w-full bg-yellow-400 text-black font-black py-5 rounded-2xl uppercase tracking-[0.3em] text-sm shadow-lg mt-8 hover:bg-yellow-300 transition-all active:scale-95">
-                  {loading ? 'PROCESSANDO...' : 'ENVIAR REGISTRO'}
-                </button>
-             </form>
-          </div>
-        )}
-
-        {/* PENDENCIAS */}
-        {activeTab === 'pendencias' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-             {pendencias.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Nenhuma cobrança ativa</p></div>}
-             {pendencias.map(r => (
-               <div key={r.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-red-500/20 shadow-lg flex flex-col justify-between group relative overflow-hidden transition-all hover:border-red-500/40 hover:-translate-y-1">
-                  <div className="absolute -top-4 -right-4 p-6 text-red-500/5 group-hover:text-red-500/10 transition-colors"><AlertCircle size={80}/></div>
-                  <div className="relative z-10">
-                     <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-6">
-                       <h4 className="text-2xl text-white italic font-black uppercase truncate pr-4 tracking-tighter">{formatClientName(r)}</h4>
-                       <span className="bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-black tracking-widest shadow-md whitespace-nowrap flex-shrink-0 ml-2">FALTA R$ {formatMoney(Number(r.valor) - Number(r.valorRecebido))}</span>
-                     </div>
-                     <div className="space-y-2 mb-8 text-[11px] font-black uppercase text-zinc-500 tracking-widest">
-                       <p>AGENTE: <span className="text-zinc-100 ml-2">{r.nome}</span></p>
-                       <p>PRODUTO: <span className="text-zinc-100 ml-2 truncate inline-block max-w-[150px] align-bottom">{formatItemName(r)}</span></p>
-                       <p className="mt-4 pt-2">VENCIMENTO: <span className="text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-md border border-yellow-400/20">{r.dataVencimento?.split('-').reverse().join('/') || 'A COMBINAR'}</span></p>
-                     </div>
-                  </div>
-                  <button onClick={() => setModalParcela(r)} className="w-full bg-green-500 text-black font-black py-4 rounded-xl uppercase text-[11px] tracking-widest hover:bg-green-400 shadow-md relative z-10 transition-all active:scale-95">RECEBER PAGAMENTO</button>
-               </div>
-             ))}
-          </div>
-        )}
-
-        {/* APROVACOES */}
-        {activeTab === 'admin' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-             {aguardando.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Fila limpa</p></div>}
-             {aguardando.map(r => (
-               <div key={r.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-yellow-400/20 shadow-lg flex flex-col justify-between">
-                  <div>
-                     <h4 className="text-2xl text-white italic font-black uppercase mb-2 truncate tracking-tighter">{r.nome}</h4>
-                     <p className="text-yellow-400 text-[10px] font-black uppercase mb-6 tracking-[0.2em] bg-yellow-400/10 inline-block px-3 py-1.5 rounded-lg">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</p>
-                     <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
-                        <p>CLIENTE: <span className="text-zinc-300 truncate inline-block max-w-[150px] align-bottom">{formatClientName(r)}</span></p>
-                        <p className="truncate">ITEM: <span className="text-zinc-300">{formatItemName(r)}</span></p>
-                     </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <button onClick={() => decidir(r.id, 'APROVAR')} className="flex-1 bg-yellow-400 text-black font-black py-3.5 rounded-xl uppercase text-[10px] hover:bg-yellow-300 shadow-md transition-all">APROVAR</button>
-                    <button onClick={() => decidir(r.id, 'REPROVAR')} className="px-5 py-3.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl hover:bg-red-500 hover:text-white transition-all"><X size={18}/></button>
-                  </div>
-               </div>
-             ))}
-          </div>
-        )}
-
-        {/* ADMIN ZONE */}
-        {activeTab === 'admin_zone' && (
-           <div className="space-y-10 animate-in fade-in duration-500">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-red-500/5 border border-red-500/20 p-10 rounded-[2.5rem] shadow-lg relative overflow-hidden group">
-                   <div className="absolute top-0 right-0 p-8 text-red-500/5"><Archive size={80}/></div>
-                   <h3 className="text-3xl font-black italic text-white mb-4 tracking-tighter">VIRADA DE MÊS</h3>
-                   <p className="text-zinc-500 mb-8 text-xs font-bold uppercase tracking-widest leading-relaxed">Arquiva as vendas e zera contadores. USE APENAS NO DIA 1º.</p>
-                   <button onClick={virarMes} disabled={loading} className="w-full bg-red-600 text-white font-black py-4 rounded-xl uppercase text-xs shadow-md hover:bg-red-500 transition-all active:scale-95">EXECUTAR VIRADA</button>
+                    <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
+                    <thead className="bg-white/5 text-zinc-600 border-b border-white/5">
+                        <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5 text-right">AÇÃO</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {registros.filter(r => r.status === 'APROVADO').slice(0, 50).map((r: any) => (
+                        <tr key={r.id} className="hover:bg-white/[0.01] transition-colors">
+                            <td className="px-8 py-5 text-white text-xs">{r.nome}</td>
+                            <td className="px-8 py-5">
+                                <span className="text-zinc-500 border border-white/5 px-3 py-1.5 rounded-lg text-[9px]">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</span>
+                            </td>
+                            <td className="px-8 py-5 text-right">
+                                <button onClick={() => deletarLog(r.id)} className="text-red-500/40 hover:text-red-500 p-2.5 bg-red-500/5 rounded-lg transition-all"><Trash2 size={16}/></button>
+                            </td>
+                        </tr>
+                        ))}
+                    </tbody>
+                    </table>
                 </div>
+            </div>
+            )}
 
-                <div className="bg-purple-500/5 border border-purple-500/20 p-10 rounded-[2.5rem] shadow-lg relative overflow-hidden group">
-                   <div className="absolute top-0 right-0 p-8 text-purple-500/5"><Database size={80}/></div>
-                   <h3 className="text-3xl font-black italic text-white mb-4 tracking-tighter">RESTAURAR SISTEMA</h3>
-                   <p className="text-zinc-500 mb-8 text-xs font-bold uppercase tracking-widest leading-relaxed">Desfaz erro da virada precoce. Volta as vendas para o Painel.</p>
-                   <button onClick={forcarAuditoria} disabled={loading} className="w-full bg-purple-600 text-white font-black py-4 rounded-xl uppercase text-xs shadow-md hover:bg-purple-500 transition-all active:scale-95">RESTAURAR VENDAS</button>
+            {/* HISTORICO BACKUP */}
+            {activeTab === 'historico_backup' && (
+            <div className="space-y-8 animate-in fade-in duration-500">
+                <div className="flex flex-col md:flex-row md:items-center gap-6 bg-[#0a0a0a] p-8 rounded-[2.5rem] border border-white/5 shadow-lg">
+                    <div className="flex-1">
+                        <p className="text-[11px] font-black uppercase text-zinc-500 mb-3 tracking-[0.3em] italic">PERÍODO</p>
+                        <select value={mesBackup} onChange={(e) => setMesBackup(e.target.value)} className="w-full bg-black border border-white/10 text-yellow-400 p-4 rounded-xl outline-none font-black uppercase text-sm cursor-pointer shadow-inner appearance-none">
+                            <option value="">Selecione...</option>
+                            {mesesDisponiveis.map(m => <option key={m} value={m}>{formatMes(m)}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex-1 flex gap-5">
+                        <div className="flex-1 bg-black p-6 rounded-[1.5rem] border border-white/5 shadow-inner">
+                            <p className="text-[10px] text-zinc-600 font-black mb-2 uppercase tracking-widest italic">BRUTO</p>
+                            <p className="text-2xl font-mono text-white italic font-black">R$ {formatMoney(backupBruto)}</p>
+                        </div>
+                        <div className="flex-1 bg-black p-6 rounded-[1.5rem] border border-green-500/10 shadow-inner">
+                            <p className="text-[10px] text-green-500/70 font-black mb-2 uppercase tracking-widest italic">CAIXA</p>
+                            <p className="text-2xl font-mono text-green-400 italic font-black">R$ {formatMoney(backupLiquido)}</p>
+                        </div>
+                    </div>
                 </div>
-             </div>
-             
-             <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-xl">
-                 <div className="p-6 px-8 border-b border-white/5 flex justify-between items-center">
-                    <h4 className="font-black italic text-zinc-500 uppercase tracking-[0.3em] text-[11px]">LOGS DE DADOS</h4>
-                 </div>
-                 <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
-                   <thead className="bg-white/5 text-zinc-600 border-b border-white/5">
-                     <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5 text-right">AÇÃO</th></tr>
-                   </thead>
-                   <tbody className="divide-y divide-white/5">
-                     {registros.filter(r => r.status === 'APROVADO').slice(0, 50).map((r: any) => (
-                       <tr key={r.id} className="hover:bg-white/[0.01] transition-colors">
-                         <td className="px-8 py-5 text-white text-xs">{r.nome}</td>
-                         <td className="px-8 py-5">
-                            <span className="text-zinc-500 border border-white/5 px-3 py-1.5 rounded-lg text-[9px]">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</span>
-                         </td>
-                         <td className="px-8 py-5 text-right">
-                            <button onClick={() => deletarLog(r.id)} className="text-red-500/40 hover:text-red-500 p-2.5 bg-red-500/5 rounded-lg transition-all"><Trash2 size={16}/></button>
-                         </td>
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
-             </div>
-           </div>
-        )}
+                
+                <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-lg">
+                    <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
+                    <thead className="bg-white/5 text-zinc-600 border-b border-white/5">
+                        <tr><th className="px-8 py-5">AGENTE</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5">VALOR</th><th className="px-8 py-5 text-right">DIA</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {registrosDoMesBackup.map((r: any) => (
+                        <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
+                            <td className="px-8 py-5 text-white text-xs italic group-hover:text-yellow-400 transition-colors">{r.nome}</td>
+                            <td className="px-8 py-5 text-zinc-500 text-[10px] italic">{r.tipo}</td>
+                            <td className={`px-8 py-5 font-mono text-sm ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
+                            <td className="px-8 py-5 text-zinc-600 text-[10px] font-mono text-right">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
+                        </tr>
+                        ))}
+                    </tbody>
+                    </table>
+                </div>
+            </div>
+            )}
+        </div>
 
-        {/* HISTORICO BACKUP */}
-        {activeTab === 'historico_backup' && (
-          <div className="space-y-8 animate-in fade-in duration-500">
-             <div className="flex flex-col md:flex-row md:items-center gap-6 bg-[#0a0a0a] p-8 rounded-[2.5rem] border border-white/5 shadow-lg">
-                 <div className="flex-1">
-                    <p className="text-[11px] font-black uppercase text-zinc-500 mb-3 tracking-[0.3em] italic">PERÍODO</p>
-                    <select value={mesBackup} onChange={(e) => setMesBackup(e.target.value)} className="w-full bg-black border border-white/10 text-yellow-400 p-4 rounded-xl outline-none font-black uppercase text-sm cursor-pointer shadow-inner appearance-none">
-                        <option value="">Selecione...</option>
-                        {mesesDisponiveis.map(m => <option key={m} value={m}>{formatMes(m)}</option>)}
-                    </select>
-                 </div>
-                 <div className="flex-1 flex gap-5">
-                    <div className="flex-1 bg-black p-6 rounded-[1.5rem] border border-white/5 shadow-inner">
-                        <p className="text-[10px] text-zinc-600 font-black mb-2 uppercase tracking-widest italic">BRUTO</p>
-                        <p className="text-2xl font-mono text-white italic font-black">R$ {formatMoney(backupBruto)}</p>
-                    </div>
-                    <div className="flex-1 bg-black p-6 rounded-[1.5rem] border border-green-500/10 shadow-inner">
-                        <p className="text-[10px] text-green-500/70 font-black mb-2 uppercase tracking-widest italic">CAIXA</p>
-                        <p className="text-2xl font-mono text-green-400 italic font-black">R$ {formatMoney(backupLiquido)}</p>
-                    </div>
-                 </div>
-             </div>
-             
-             <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-lg">
-                 <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
-                   <thead className="bg-white/5 text-zinc-600 border-b border-white/5">
-                     <tr><th className="px-8 py-5">AGENTE</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5">VALOR</th><th className="px-8 py-5 text-right">DIA</th></tr>
-                   </thead>
-                   <tbody className="divide-y divide-white/5">
-                     {registrosDoMesBackup.map((r: any) => (
-                       <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
-                         <td className="px-8 py-5 text-white text-xs italic group-hover:text-yellow-400 transition-colors">{r.nome}</td>
-                         <td className="px-8 py-5 text-zinc-500 text-[10px] italic">{r.tipo}</td>
-                         <td className={`px-8 py-5 font-mono text-sm ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
-                         <td className="px-8 py-5 text-zinc-600 text-[10px] font-mono text-right">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
-             </div>
-          </div>
-        )}
+        {/* FOOTER DESENVOLVIDO POR VZ - AGORA CENTRALIZADO NO FIM DA PÁGINA */}
+        <footer className="mt-auto pb-8 pt-8 flex flex-col items-center justify-center pointer-events-none opacity-40 w-full border-t border-white/5">
+           <p className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500 italic mb-1 text-center">
+              © {new Date().getFullYear()} AFL PAINEL • TODOS OS DIREITOS RESERVADOS
+           </p>
+           <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white italic text-center">
+              DESENVOLVIDO POR <span className="text-yellow-400">{'</>'} VZ</span>
+           </p>
+        </footer>
+
       </main>
 
       {/* --- MODAL DETALHADO DO MEMBRO --- */}
@@ -632,16 +645,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
            </div>
         </div>
       )}
-
-      {/* FOOTER DESENVOLVIDO POR VZ */}
-      <footer className="absolute bottom-8 flex flex-col items-center pointer-events-none opacity-40">
-         <p className="text-[8px] md:text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500 italic mb-2 text-center">
-            © {new Date().getFullYear()} AFL PAINEL • TODOS OS DIREITOS RESERVADOS
-         </p>
-         <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.5em] text-white italic text-center">
-            DESENVOLVIDO POR <span className="text-yellow-400">{'</>'} VZ</span>
-         </p>
-      </footer>
 
     </div>
   );
