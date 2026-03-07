@@ -1,79 +1,46 @@
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "./api/auth/[...nextauth]/route";
-import Painel from "./Painel";
-import LoginButton from "./LoginButton";
-import LogoutButton from "./LogoutButton";
-import { ShieldAlert } from "lucide-react";
+"use client";
+import React from 'react';
+import { signIn } from "next-auth/react";
+import { UsersRound, Lock } from 'lucide-react';
 
-export default async function Page() {
-  const session = await getServerSession(authOptions);
+export default function LoginScreen() {
+  return (
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden text-white selection:bg-yellow-400">
+      
+      {/* Luz de Fundo Premium */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] md:w-[800px] md:h-[800px] bg-yellow-500/5 rounded-full blur-[100px] md:blur-[120px] pointer-events-none"></div>
 
-  if (!session) {
-    return (
-      <div className="flex min-h-screen bg-[#050505] items-center justify-center p-4 selection:bg-yellow-400/30">
-        <div className="bg-[#0a0a0a] border border-white/5 p-12 rounded-[3.5rem] shadow-2xl text-center max-w-sm w-full relative overflow-hidden group">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-yellow-400 shadow-[0_0_30px_#facc15]"></div>
-          <h1 className="text-5xl font-black italic text-white uppercase tracking-tighter mb-2 mt-4">
-            EQUIPE<span className="text-yellow-400">AFL</span>
-          </h1>
-          <p className="text-zinc-600 text-[10px] uppercase tracking-[0.3em] font-black mb-10">Acesso Restrito</p>
-          <LoginButton />
+      <main className="relative z-10 flex flex-col items-center animate-in zoom-in-95 duration-700 px-6">
+        <div className="p-5 md:p-6 bg-yellow-400 rounded-3xl text-black shadow-[0_0_60px_rgba(250,204,21,0.2)] mb-8">
+          <UsersRound size={48} className="md:w-[56px] md:h-[56px]" />
         </div>
-      </div>
-    );
-  }
-
-  // AQUI ESTÁ A CORREÇÃO DO TYPESCRIPT (O "as any" força a leitura do ID)
-  const userId = (session as any).user?.id;
-  let hasAccess = false;
-  let isAdmin = false;
-  let erroAcesso = "NÃO FOI POSSÍVEL OBTER SEU ID DO DISCORD.";
-
-  if (userId) {
-    try {
-      const res = await fetch(`https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${userId}`, {
-        headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` },
-        next: { revalidate: 0 }
-      });
-
-      if (res.ok) {
-        const member = await res.json();
         
-        const hierarchyIds = [
-          process.env.DISCORD_ADMIN_ROLE_ID,
-          process.env.ROLE_RESP_VENDAS, process.env.ROLE_MASTER, process.env.ROLE_RESP_AFL,
-          process.env.ROLE_AUXILIAR, process.env.ROLE_LIDER, process.env.ROLE_SUB_LIDER, process.env.ROLE_MEMBRO
-        ].filter(Boolean);
-
-        const adminIds = [
-          process.env.DISCORD_ADMIN_ROLE_ID,
-          process.env.ROLE_RESP_VENDAS, process.env.ROLE_MASTER
-        ].filter(Boolean);
-
-        hasAccess = member.roles.some((role: string) => hierarchyIds.includes(role));
-        isAdmin = member.roles.some((role: string) => adminIds.includes(role));
+        <h1 className="text-5xl md:text-7xl font-black uppercase italic tracking-tighter mb-4 text-center leading-none">
+          AFL<span className="text-yellow-400 ml-2">PAINEL</span>
+        </h1>
         
-        if (!hasAccess) erroAcesso = "VOCÊ NÃO POSSUI NENHUM CARGO DA HIERARQUIA AFL.";
-      } else {
-        erroAcesso = "VOCÊ NÃO ESTÁ NO SERVIDOR DO DISCORD.";
-      }
-    } catch (e) {
-      erroAcesso = "ERRO DE COMUNICAÇÃO COM O DISCORD.";
-    }
-  }
+        <p className="text-zinc-500 text-[10px] md:text-xs font-black uppercase tracking-[0.4em] mb-12 text-center max-w-sm">
+          Acesso Restrito
+        </p>
 
-  if (!hasAccess) {
-    return (
-      <div className="flex min-h-screen bg-[#050505] items-center justify-center p-4">
-        <div className="bg-[#0a0a0a] border border-red-900/30 p-12 rounded-[3.5rem] text-center max-w-sm w-full relative shadow-[0_0_50px_rgba(239,68,68,0.05)]">
-          <div className="flex justify-center mb-6 text-red-500"><ShieldAlert size={64} strokeWidth={1.5} /></div>
-          <h2 className="text-3xl font-black italic text-white uppercase mb-4 tracking-tighter">ACESSO NEGADO</h2>
-          <p className="text-red-400 text-[10px] font-black uppercase mb-10 p-4 bg-red-500/5 rounded-2xl border border-red-500/10">{erroAcesso}</p>
-          <LogoutButton />
-        </div>
-      </div>
-    );
-  }
+        <button
+          onClick={() => signIn('discord')}
+          className="flex items-center justify-center gap-4 bg-[#5865F2] hover:bg-[#4752C4] text-white px-8 py-5 md:px-10 md:py-6 rounded-[1.5rem] font-black uppercase tracking-widest text-xs md:text-sm transition-all hover:scale-105 active:scale-95 shadow-[0_15px_40px_rgba(88,101,242,0.3)] w-full sm:w-auto group"
+        >
+          <Lock size={20} className="group-hover:-translate-y-0.5 transition-transform" />
+          ENTRAR COM DISCORD
+        </button>
+      </main>
 
-  return <Painel initialIsAdmin={isAdmin} userSession={session} />;
+      {/* FOOTER DESENVOLVIDO POR VZ */}
+      <footer className="absolute bottom-8 flex flex-col items-center pointer-events-none opacity-40">
+         <p className="text-[8px] md:text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500 italic mb-2 text-center">
+            © {new Date().getFullYear()} AFL PAINEL • TODOS OS DIREITOS RESERVADOS
+         </p>
+         <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.5em] text-white italic text-center">
+            DESENVOLVIDO POR <span className="text-yellow-400">{'</>'} VZ</span>
+         </p>
+      </footer>
+    </div>
+  );
 }

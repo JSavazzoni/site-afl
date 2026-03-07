@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { signOut } from "next-auth/react";
 
-// --- CONFIGURAÇÕES GLOBAIS ---
 const HIERARQUIA = ["Resp.Vendas", "Master AFL", "Resp.AFL", "Auxiliar AFL", "Lider AFL", "Sub-Lider AFL", "Membro AFL"];
 const formatMoney = (val: any) => Number(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -68,7 +67,21 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     }
   }, [registros, mesBackup]);
 
-  // --- CÁLCULO DE DADOS RESTAURADO PARA O MODELO IDEAL ---
+  const formatItemName = (r: any) => {
+    if (r.tipo === 'CORRIDINHA' && (!r.item || r.item === 'N/A')) return 'BÔNUS: CORRIDINHA MALUCA';
+    if (r.tipo === 'SAQUE' && (!r.item || r.item === 'N/A')) return 'PAGAMENTO REALIZADO';
+    return r.item !== 'N/A' ? r.item : r.tipo;
+  };
+
+  const formatClientName = (r: any) => {
+    if (r.tipo === 'CORRIDINHA' && (!r.cliente || r.cliente === 'N/A')) return 'EQUIPE AFL';
+    if (r.tipo === 'SAQUE' && (!r.cliente || r.cliente === 'N/A')) return 'FINANCEIRO AFL';
+    return r.cliente !== 'N/A' ? r.cliente : 'SISTEMA';
+  };
+
+  const isParcela = (item: string) => (item || '').toUpperCase().includes('PAGAMENTO DE PARCELA');
+  const extractVal = (r: any) => Number(r.valor) || Number(r.valorRecebido) || Number(r.cashbackExtra) || 0;
+
   const equipeProcessada = equipe.map(m => {
     const cargoReal = m.cargoPainel || m.cargo || 'Membro AFL';
     const perc = getCashback(cargoReal);
@@ -79,20 +92,17 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         r.criado_em && r.criado_em.startsWith(mesAtualStr)
     );
 
-    // BRUTO: Apenas vendas puras (Ignora as parcelas pagas e dívidas antigas)
-    const bruto = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valor) || 0), 0);
+    const bruto = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !isParcela(r.item)).reduce((a, r) => a + (Number(r.valor) || 0), 0);
     
-    // CAIXA DO MÊS: Vendas Puras + Dinheiro das Parcelas (Para você ver a grana real entrando)
-    const liqVendas = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
-    const liqParcelas = regsMes.filter(r => (r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valor) || Number(r.valorRecebido) || 0), 0);
+    const liqVendas = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
+    const liqParcelas = regsMes.filter(r => isParcela(r.item)).reduce((a, r) => a + extractVal(r), 0);
     const liq = liqVendas + liqParcelas;
 
     const corridinhas = regsMes.filter(r => r.tipo === 'CORRIDINHA' && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
     const pago = regsMes.filter(r => r.tipo === 'SAQUE' && !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')).reduce((a, r) => a + (Number(r.valor) || 0), 0);
 
-    // SALDO REAL: Lê da venda original e ignora a parcela para não duplicar
     const regsAtivos = registros.filter(r => String(r.discordId) === String(m.discordId) && r.status === 'APROVADO');
-    const ativoLiq = regsAtivos.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
+    const ativoLiq = regsAtivos.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
     const ativoExtra = regsAtivos.filter(r => r.tipo === 'CORRIDINHA').reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
     const ativoPago = regsAtivos.filter(r => r.tipo === 'SAQUE').reduce((a, r) => a + (Number(r.valor) || 0), 0);
     
@@ -116,10 +126,9 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
   const mesesDisponiveis = Array.from(new Set(registros.map(r => r.criado_em?.substring(0, 7)))).filter(Boolean).sort().reverse();
   const registrosDoMesBackup = registros.filter(r => r.criado_em?.startsWith(mesBackup));
-  const backupBruto = registrosDoMesBackup.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA')).reduce((a,r)=>a+Number(r.valor), 0);
-  const backupLiquido = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r)=>a+(Number(r.valorRecebido) || Number(r.valor)), 0);
+  const backupBruto = registrosDoMesBackup.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a,r) => a + (Number(r.valor) || 0), 0);
+  const backupLiquido = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r) => a + (isParcela(r.item) ? extractVal(r) : (Number(r.valorRecebido) || 0)), 0);
 
-  // --- AÇÕES DO PAINEL ---
   const handleEnviar = async (e: any) => {
     e.preventDefault();
     setLoading(true);
@@ -129,6 +138,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
     const payload = { 
       ...form, 
+      item: form.tipo === 'CORRIDINHA' ? 'BÔNUS: CORRIDINHA MALUCA' : form.tipo === 'SAQUE' ? 'PAGAMENTO REALIZADO' : (form.item || 'N/A'),
+      cliente: form.tipo === 'CORRIDINHA' ? 'EQUIPE AFL' : form.tipo === 'SAQUE' ? 'FINANCEIRO AFL' : (form.cliente || 'N/A'),
       valorNumerico: form.tipo === 'CORRIDINHA' ? 0 : valLimpo,
       recebidoNumerico: form.tipo === 'CORRIDINHA' ? 0 : recLimpo,
       cashbackExtra: form.tipo === 'CORRIDINHA' ? valLimpo : 0,
@@ -185,9 +196,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   return (
     <div className="flex min-h-screen bg-[#050505] text-white font-sans selection:bg-yellow-400 overflow-hidden">
       
-      {/* CSS GLOBAL DA SCROLLBAR BLINDADO */}
+      {/* CSS DA SCROLLBAR GLOBAL */}
       <style dangerouslySetInnerHTML={{__html: `
-        /* Força todos os elementos do site a usarem barra escura */
         html, body, * {
           scrollbar-width: thin !important;
           scrollbar-color: #3f3f46 transparent !important;
@@ -337,7 +347,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                                 {r.tipo || 'VENDA'}
                             </span>
                          </td>
-                         <td className="px-8 py-5 text-zinc-400 italic text-xs max-w-[250px] truncate">{r.cliente || r.item || '-'}</td>
+                         <td className="px-8 py-5 text-zinc-400 italic text-xs max-w-[250px] truncate">{formatClientName(r)} | {formatItemName(r)}</td>
                          <td className={`px-8 py-5 font-mono text-sm text-right whitespace-nowrap ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
                          <td className="px-8 py-5 text-zinc-600 text-[10px] text-right">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
                        </tr>
@@ -395,15 +405,15 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                <div key={r.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-red-500/20 shadow-lg flex flex-col justify-between group relative overflow-hidden transition-all hover:border-red-500/40 hover:-translate-y-1">
                   <div className="absolute -top-4 -right-4 p-6 text-red-500/5 group-hover:text-red-500/10 transition-colors"><AlertCircle size={80}/></div>
                   <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-6">
-                       <h4 className="text-2xl text-white italic font-black uppercase truncate pr-4 tracking-tighter">{r.cliente}</h4>
+                     <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-6">
+                       <h4 className="text-2xl text-white italic font-black uppercase truncate pr-4 tracking-tighter">{formatClientName(r)}</h4>
                        <span className="bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-black tracking-widest shadow-md whitespace-nowrap flex-shrink-0 ml-2">FALTA R$ {formatMoney(Number(r.valor) - Number(r.valorRecebido))}</span>
-                    </div>
-                    <div className="space-y-2 mb-8 text-[11px] font-black uppercase text-zinc-500 tracking-widest">
+                     </div>
+                     <div className="space-y-2 mb-8 text-[11px] font-black uppercase text-zinc-500 tracking-widest">
                        <p>AGENTE: <span className="text-zinc-100 ml-2">{r.nome}</span></p>
-                       <p>PRODUTO: <span className="text-zinc-100 ml-2 truncate inline-block max-w-[150px] align-bottom">{r.item}</span></p>
+                       <p>PRODUTO: <span className="text-zinc-100 ml-2 truncate inline-block max-w-[150px] align-bottom">{formatItemName(r)}</span></p>
                        <p className="mt-4 pt-2">VENCIMENTO: <span className="text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-md border border-yellow-400/20">{r.dataVencimento?.split('-').reverse().join('/') || 'A COMBINAR'}</span></p>
-                    </div>
+                     </div>
                   </div>
                   <button onClick={() => setModalParcela(r)} className="w-full bg-green-500 text-black font-black py-4 rounded-xl uppercase text-[11px] tracking-widest hover:bg-green-400 shadow-md relative z-10 transition-all active:scale-95">RECEBER PAGAMENTO</button>
                </div>
@@ -421,8 +431,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                      <h4 className="text-2xl text-white italic font-black uppercase mb-2 truncate tracking-tighter">{r.nome}</h4>
                      <p className="text-yellow-400 text-[10px] font-black uppercase mb-6 tracking-[0.2em] bg-yellow-400/10 inline-block px-3 py-1.5 rounded-lg">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</p>
                      <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
-                        <p>CLIENTE: <span className="text-zinc-300 truncate inline-block max-w-[150px] align-bottom">{r.cliente}</span></p>
-                        <p>ITEM: <span className="text-zinc-300 truncate inline-block max-w-[150px] align-bottom">{r.item}</span></p>
+                        <p>CLIENTE: <span className="text-zinc-300 truncate inline-block max-w-[150px] align-bottom">{formatClientName(r)}</span></p>
+                        <p className="truncate">ITEM: <span className="text-zinc-300">{formatItemName(r)}</span></p>
                      </div>
                   </div>
                   <div className="flex gap-3">
@@ -576,13 +586,12 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
                  <div className="space-y-6">
                     <h3 className="text-xl font-black uppercase italic text-zinc-600 flex items-center gap-4 mb-8 tracking-[0.2em]"><History size={22} className="text-yellow-400"/> EXTRATO RECENTE</h3>
-                    {/* AQUI A BARRA DE ROLAGEM TAMBÉM FOI BLINDADA */}
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 transparent' }}>
-                        {registros.filter(r => String(r.discordId) === String(modalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && r.criado_em.startsWith(mesAtualStr) && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).map((r: any) => (
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                        {registros.filter(r => String(r.discordId) === String(modalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && r.criado_em.startsWith(mesAtualStr)).map((r: any) => (
                           <div key={r.id} className="flex items-center bg-[#0a0a0a] p-6 rounded-[1.5rem] border border-white/5 hover:border-white/10 transition-all gap-4">
                              <div className="min-w-0 flex-1">
-                                <p className={`font-black text-sm uppercase italic mb-1 truncate max-w-[200px] lg:max-w-xs ${r.tipo === 'CORRIDINHA' ? 'text-blue-400' : r.tipo === 'SAQUE' ? 'text-red-400' : 'text-white'}`} title={r.item || r.tipo}>{r.item || r.tipo}</p>
-                                <p className="text-[10px] text-zinc-600 tracking-widest uppercase mt-1 italic truncate">{new Date(r.criado_em).toLocaleDateString('pt-BR')} • {r.cliente || 'SISTEMA'}</p>
+                                <p className={`font-black text-sm uppercase italic mb-1 truncate max-w-[200px] lg:max-w-xs ${r.tipo === 'CORRIDINHA' ? 'text-blue-400' : r.tipo === 'SAQUE' ? 'text-red-400' : 'text-white'}`} title={formatItemName(r)}>{formatItemName(r)}</p>
+                                <p className="text-[10px] text-zinc-600 tracking-widest uppercase mt-1 italic truncate">{new Date(r.criado_em).toLocaleDateString('pt-BR')} • {formatClientName(r)}</p>
                              </div>
                              <div className="flex-shrink-0 text-right">
                                 <p className={`font-mono text-lg font-black italic whitespace-nowrap ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</p>
@@ -605,7 +614,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
               <form onSubmit={handlePagarParcela} className="space-y-8">
                  <div className="bg-black border border-white/5 p-8 rounded-[2rem] text-center mb-4 shadow-inner">
                     <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.3em] mb-2 italic">DEVEDOR</p>
-                    <p className="text-2xl font-black text-white italic truncate tracking-tight">{modalParcela.cliente}</p>
+                    <p className="text-2xl font-black text-white italic truncate tracking-tight">{formatClientName(modalParcela)}</p>
                  </div>
                  
                  <InputField label={`RECEBIDO AGORA (FALTA R$ ${formatMoney(Number(modalParcela.valor) - Number(modalParcela.valorRecebido))})`} type="number" value={valorParcela} onChange={setValorParcela} placeholder="R$ 0,00" />
@@ -623,6 +632,16 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
            </div>
         </div>
       )}
+
+      {/* FOOTER DESENVOLVIDO POR VZ */}
+      <footer className="absolute bottom-8 flex flex-col items-center pointer-events-none opacity-40">
+         <p className="text-[8px] md:text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500 italic mb-2 text-center">
+            © {new Date().getFullYear()} AFL PAINEL • TODOS OS DIREITOS RESERVADOS
+         </p>
+         <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.5em] text-white italic text-center">
+            DESENVOLVIDO POR <span className="text-yellow-400">{'</>'} VZ</span>
+         </p>
+      </footer>
 
     </div>
   );
