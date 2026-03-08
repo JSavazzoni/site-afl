@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: 'Sistema corporativo exclusivo para controle de vendas, aprovações e comissões da equipe AFL.',
   openGraph: {
     title: 'AFL PAINEL | Central de Gestão',
-    description: 'Acesse o painel para registrar vendas, conferir suas metas e acompanhar seus ganhos ao vivo.',
+    description: 'Acesse o painel para conferir suas metas e acompanhar seus ganhos ao vivo.',
     siteName: 'AFL PAINEL',
     images: [
       {

@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import useSWR from 'swr';
 import { 
   LayoutDashboard, Trophy, PlusCircle, ShieldCheck, TrendingUp, Users, 
   LogOut, UsersRound, X, History, CheckCircle2, Database, Clock, 
@@ -24,14 +25,29 @@ const extractFirstName = (fullName: string) => {
    return cleanName.split(' ')[0].toUpperCase();
 };
 
+const formatItemName = (r: any) => {
+  if (r.tipo === 'CORRIDINHA' && (!r.item || r.item === 'N/A')) return 'BÔNUS: CORRIDINHA MALUCA';
+  if (r.tipo === 'SAQUE' && (!r.item || r.item === 'N/A')) return 'PAGAMENTO REALIZADO';
+  return r.item !== 'N/A' ? r.item : r.tipo;
+};
+
+const formatClientName = (r: any) => {
+  if (r.tipo === 'CORRIDINHA' && (!r.cliente || r.cliente === 'N/A')) return 'EQUIPE AFL';
+  if (r.tipo === 'SAQUE' && (!r.cliente || r.cliente === 'N/A')) return 'FINANCEIRO AFL';
+  return r.cliente !== 'N/A' ? r.cliente : 'SISTEMA';
+};
+
+const isParcela = (item: string) => (item || '').toUpperCase().includes('PAGAMENTO DE PARCELA');
+const extractVal = (r: any) => Number(r.valor) || Number(r.valorRecebido) || Number(r.cashbackExtra) || 0;
+
+// NOVO: Fetcher ultra-rápido do SWR
+const fetcher = (url: string) => fetch(url).then(res => res.json());
+
 export default function Painel({ initialIsAdmin, userSession }: any) {
   const [activeTab, setActiveTab] = useState('inicio');
   const [selectedCargo, setSelectedCargo] = useState('Todos');
-  const [registros, setRegistros] = useState<any[]>([]);
-  const [equipe, setEquipe] = useState<any[]>([]);
   const [isAdmin] = useState(initialIsAdmin || false);
   const [loading, setLoading] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
   
   // ESTADOS DE BUSCA E PAGINAÇÃO
@@ -44,48 +60,29 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   
   const [membroSelecionado, setMembroSelecionado] = useState<any>(null);
   const [modalParcela, setModalParcela] = useState<any>(null);
-  
-  // NOVO ESTADO: O MODAL DE CONFIRMAÇÃO BONITO
-  const [modalConfirmacao, setModalConfirmacao] = useState<{
-    aberto: boolean;
-    titulo: string;
-    mensagem: string;
-    acao: () => void;
-    tipo?: 'perigo' | 'aviso';
-  } | null>(null);
+  const [modalConfirmacao, setModalConfirmacao] = useState<{ aberto: boolean; titulo: string; mensagem: string; acao: () => void; tipo?: 'perigo' | 'aviso'; } | null>(null);
 
   const [valorParcela, setValorParcela] = useState('');
   const [proximoVencimento, setProximoVencimento] = useState('');
   const [mesBackup, setMesBackup] = useState('');
   
-  const [form, setForm] = useState({ 
-    tipo: 'VENDA', vendedorId: '', cliente: '', item: '', 
-    valor: '', valorRecebido: '', recrutadoId: '', dataVencimento: '', membroSaqueId: ''
-  });
+  const [form, setForm] = useState({ tipo: 'VENDA', vendedorId: '', cliente: '', item: '', valor: '', valorRecebido: '', recrutadoId: '', dataVencimento: '', membroSaqueId: '' });
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
   const dataAtual = new Date();
   const mesAtualStr = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}`;
 
-  const getCashback = (cargo: string) => { 
-    const r: any = { 'Resp.Vendas': 0.15, 'Master AFL': 0.12, 'Resp.AFL': 0.10, 'Auxiliar AFL': 0.09, 'Lider AFL': 0.08, 'Sub-Lider AFL': 0.07, 'Membro AFL': 0.06 };
-    return r[cargo || 'Membro AFL'] || 0.06;
-  };
+  // 👇 O SWR MÁGICO SUBSTITUI O SETINTERVAL 👇
+  // Ele cria cache automático, pausa a busca se você for pra outra aba e atualiza sozinho!
+  const { data: equipeData, mutate: mutateEquipe } = useSWR('/api/equipe', fetcher, { refreshInterval: 5000 });
+  const { data: registrosData, mutate: mutateRegistros } = useSWR('/api/registros', fetcher, { refreshInterval: 5000 });
 
-  const pulse = useCallback(async () => {
-    try {
-      const v = Date.now();
-      const [resE, resR] = await Promise.all([
-        fetch(`/api/equipe?v=${v}`, { cache: 'no-store' }),
-        fetch(`/api/registros?v=${v}`, { cache: 'no-store' })
-      ]);
-      if (resE.ok) setEquipe(await resE.json());
-      if (resR.ok) setRegistros(await resR.json());
-      setIsInitialLoad(false); 
-    } catch {}
-  }, []);
+  const equipe = equipeData || [];
+  const registros = registrosData || [];
+  const isInitialLoad = !equipeData || !registrosData; // Esqueleto ligado até o SWR puxar os dados
 
-  useEffect(() => { pulse(); const timer = setInterval(pulse, 5000); return () => clearInterval(timer); }, [pulse]);
+  // Sincroniza a força bruta caso os dados sejam alterados manualmente pelo admin
+  const forcarAtualizacao = () => { mutateEquipe(); mutateRegistros(); };
 
   useEffect(() => {
     if (registros.length > 0 && !mesBackup) {
@@ -94,97 +91,92 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     }
   }, [registros, mesBackup]);
 
-  const formatItemName = (r: any) => {
-    if (r.tipo === 'CORRIDINHA' && (!r.item || r.item === 'N/A')) return 'BÔNUS: CORRIDINHA MALUCA';
-    if (r.tipo === 'SAQUE' && (!r.item || r.item === 'N/A')) return 'PAGAMENTO REALIZADO';
-    return r.item !== 'N/A' ? r.item : r.tipo;
-  };
+  // 👇 MEMÓRIA MATEMÁTICA (useMemo) 👇
+  // A partir daqui, NENHUMA conta é refeita quando você digita nas barras de pesquisa!
+  
+  const equipeProcessada = useMemo(() => {
+    const getCashback = (cargo: string) => { 
+        const r: any = { 'Resp.Vendas': 0.15, 'Master AFL': 0.12, 'Resp.AFL': 0.10, 'Auxiliar AFL': 0.09, 'Lider AFL': 0.08, 'Sub-Lider AFL': 0.07, 'Membro AFL': 0.06 };
+        return r[cargo || 'Membro AFL'] || 0.06;
+    };
 
-  const formatClientName = (r: any) => {
-    if (r.tipo === 'CORRIDINHA' && (!r.cliente || r.cliente === 'N/A')) return 'EQUIPE AFL';
-    if (r.tipo === 'SAQUE' && (!r.cliente || r.cliente === 'N/A')) return 'FINANCEIRO AFL';
-    return r.cliente !== 'N/A' ? r.cliente : 'SISTEMA';
-  };
+    if (!equipe.length || !registros.length) return [];
 
-  const isParcela = (item: string) => (item || '').toUpperCase().includes('PAGAMENTO DE PARCELA');
-  const extractVal = (r: any) => Number(r.valor) || Number(r.valorRecebido) || Number(r.cashbackExtra) || 0;
+    return equipe.map((m: any) => {
+      const cargoReal = m.cargoPainel || m.cargo || 'Membro AFL';
+      const perc = getCashback(cargoReal);
 
-  const equipeProcessada = equipe.map(m => {
-    const cargoReal = m.cargoPainel || m.cargo || 'Membro AFL';
-    const perc = getCashback(cargoReal);
+      const regsMes = registros.filter((r: any) => String(r.discordId) === String(m.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && r.criado_em && r.criado_em.startsWith(mesAtualStr));
+      const bruto = regsMes.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !isParcela(r.item)).reduce((a: any, r: any) => a + (Number(r.valor) || 0), 0);
+      const liqVendas = regsMes.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a: any, r: any) => a + (Number(r.valorRecebido) || 0), 0);
+      const liqParcelas = regsMes.filter((r: any) => isParcela(r.item)).reduce((a: any, r: any) => a + extractVal(r), 0);
+      const liq = liqVendas + liqParcelas;
+      const corridinhas = regsMes.filter((r: any) => r.tipo === 'CORRIDINHA' && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).reduce((a: any, r: any) => a + (Number(r.cashbackExtra) || 0), 0);
+      const pago = regsMes.filter((r: any) => r.tipo === 'SAQUE' && !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')).reduce((a: any, r: any) => a + (Number(r.valor) || 0), 0);
 
-    const regsMes = registros.filter(r => 
-        String(r.discordId) === String(m.discordId) && 
-        (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
-        r.criado_em && r.criado_em.startsWith(mesAtualStr)
-    );
+      const regsAtivos = registros.filter((r: any) => String(r.discordId) === String(m.discordId) && r.status === 'APROVADO');
+      const ativoLiq = regsAtivos.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a: any, r: any) => a + (Number(r.valorRecebido) || 0), 0);
+      const ativoExtra = regsAtivos.filter((r: any) => r.tipo === 'CORRIDINHA').reduce((a: any, r: any) => a + (Number(r.cashbackExtra) || 0), 0);
+      const ativoPago = regsAtivos.filter((r: any) => r.tipo === 'SAQUE').reduce((a: any, r: any) => a + (Number(r.valor) || 0), 0);
+      
+      const saldoReal = (ativoLiq * perc) + ativoExtra - ativoPago;
 
-    const bruto = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !isParcela(r.item)).reduce((a, r) => a + (Number(r.valor) || 0), 0);
-    const liqVendas = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
-    const liqParcelas = regsMes.filter(r => isParcela(r.item)).reduce((a, r) => a + extractVal(r), 0);
-    const liq = liqVendas + liqParcelas;
+      return { ...m, cargoReal, bruto, liq, corridinhas, pago, saldoReal };
+    }).sort((a: any, b: any) => b.bruto - a.bruto);
+  }, [equipe, registros, mesAtualStr]);
 
-    const corridinhas = regsMes.filter(r => r.tipo === 'CORRIDINHA' && !(r.item || '').toUpperCase().includes('SALDO RETIDO')).reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
-    const pago = regsMes.filter(r => r.tipo === 'SAQUE' && !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')).reduce((a, r) => a + (Number(r.valor) || 0), 0);
-
-    const regsAtivos = registros.filter(r => String(r.discordId) === String(m.discordId) && r.status === 'APROVADO');
-    const ativoLiq = regsAtivos.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
-    const ativoExtra = regsAtivos.filter(r => r.tipo === 'CORRIDINHA').reduce((a, r) => a + (Number(r.cashbackExtra) || 0), 0);
-    const ativoPago = regsAtivos.filter(r => r.tipo === 'SAQUE').reduce((a, r) => a + (Number(r.valor) || 0), 0);
-    
-    const saldoReal = (ativoLiq * perc) + ativoExtra - ativoPago;
-
-    return { ...m, cargoReal, bruto, liq, corridinhas, pago, saldoReal };
-  }).sort((a, b) => b.bruto - a.bruto);
-
-  const equipeFiltrada = selectedCargo === 'Todos' ? equipeProcessada : equipeProcessada.filter(m => m.cargoReal === selectedCargo);
-  const modalMember = membroSelecionado ? equipeProcessada.find(m => m.discordId === membroSelecionado.discordId) || membroSelecionado : null;
-  const aguardando = registros.filter(r => r.status === 'PENDENTE');
-  const pendencias = registros
-    .filter(r => (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.tipo === 'VENDA' || !r.tipo) && Number(r.valorRecebido) < Number(r.valor))
-    .sort((a, b) => {
+  const equipeFiltrada = useMemo(() => selectedCargo === 'Todos' ? equipeProcessada : equipeProcessada.filter(m => m.cargoReal === selectedCargo), [equipeProcessada, selectedCargo]);
+  
+  const aguardando = useMemo(() => registros.filter((r: any) => r.status === 'PENDENTE'), [registros]);
+  
+  const pendencias = useMemo(() => registros
+    .filter((r: any) => (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.tipo === 'VENDA' || !r.tipo) && Number(r.valorRecebido) < Number(r.valor))
+    .sort((a: any, b: any) => {
       if (!a.dataVencimento) return 1;
       if (!b.dataVencimento) return -1;
       return String(a.dataVencimento).localeCompare(String(b.dataVencimento));
-    });
+    }), [registros]);
   
-  const muralMesFiltrado = registros.filter(r => 
+  const muralMesFiltrado = useMemo(() => registros.filter((r: any) => 
     (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
     r.criado_em && r.criado_em.startsWith(mesAtualStr) &&
     !(r.item || '').toUpperCase().includes('SALDO RETIDO') &&
     !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')
-  ).filter(r => {
+  ).filter((r: any) => {
     if (termoMural === '') return true;
     const busca = termoMural.toLowerCase();
     return formatClientName(r).toLowerCase().includes(busca) || 
            formatItemName(r).toLowerCase().includes(busca) || 
            (r.nome && r.nome.toLowerCase().includes(busca));
-  }).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
+  }).sort((a: any, b: any) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime()), [registros, mesAtualStr, termoMural]);
 
-  const logsFiltrados = registros.filter(r => r.status === 'APROVADO').filter(r => {
+  const logsFiltrados = useMemo(() => registros.filter((r: any) => r.status === 'APROVADO').filter((r: any) => {
     if (termoLogs === '') return true;
     const busca = termoLogs.toLowerCase();
     return (r.nome || '').toLowerCase().includes(busca) || 
            (r.item || '').toLowerCase().includes(busca) || 
            (r.tipo || '').toLowerCase().includes(busca);
-  }).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
+  }).sort((a: any, b: any) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime()), [registros, termoLogs]);
 
-  const mesesDisponiveis = Array.from(new Set(registros.map(r => r.criado_em?.substring(0, 7)))).filter(Boolean).sort().reverse();
-  const registrosDoMesBackup = registros.filter(r => r.criado_em?.startsWith(mesBackup));
+  const mesesDisponiveis = useMemo(() => Array.from(new Set(registros.map((r: any) => r.criado_em?.substring(0, 7)))).filter(Boolean).sort().reverse(), [registros]);
+  const registrosDoMesBackup = useMemo(() => registros.filter((r: any) => r.criado_em?.startsWith(mesBackup)), [registros, mesBackup]);
   
-  const historicoFiltrado = registrosDoMesBackup.filter(r => {
+  const historicoFiltrado = useMemo(() => registrosDoMesBackup.filter((r: any) => {
     if (termoHistorico === '') return true;
     const busca = termoHistorico.toLowerCase();
     return (r.nome || '').toLowerCase().includes(busca) || 
            (r.item || '').toLowerCase().includes(busca) || 
            (r.tipo || '').toLowerCase().includes(busca);
-  }).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
+  }).sort((a: any,b: any) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime()), [registrosDoMesBackup, termoHistorico]);
 
-  const backupBruto = registrosDoMesBackup.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a,r) => a + (Number(r.valor) || 0), 0);
-  const backupLiquido = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r) => a + (isParcela(r.item) ? extractVal(r) : (Number(r.valorRecebido) || 0)), 0);
+  const backupBruto = useMemo(() => registrosDoMesBackup.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a: any,r: any) => a + (Number(r.valor) || 0), 0), [registrosDoMesBackup]);
+  const backupLiquido = useMemo(() => registrosDoMesBackup.filter((r: any) => r.tipo === 'VENDA' || !r.tipo).reduce((a: any,r: any) => a + (isParcela(r.item) ? extractVal(r) : (Number(r.valorRecebido) || 0)), 0), [registrosDoMesBackup]);
 
-  const maxBrutoGrafico = Math.max(...equipeProcessada.map(m => m.bruto), 1);
+  const maxBrutoGrafico = useMemo(() => Math.max(...equipeProcessada.map(m => m.bruto), 1), [equipeProcessada]);
 
+  const modalMember = useMemo(() => membroSelecionado ? equipeProcessada.find(m => m.discordId === membroSelecionado.discordId) || membroSelecionado : null, [membroSelecionado, equipeProcessada]);
+
+  // Lógica Formulário
   const valTotalForm = parseFloat(form.valor.replace(',', '.')) || 0;
   const valRecebidoForm = form.valorRecebido !== '' ? parseFloat(form.valorRecebido.replace(',', '.')) : valTotalForm;
   const mostrarDataVencimento = valRecebidoForm < valTotalForm; 
@@ -210,7 +202,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     if (res.ok) {
       setForm({ tipo: 'VENDA', vendedorId: '', cliente: '', item: '', valor: '', valorRecebido: '', recrutadoId: '', dataVencimento: '', membroSaqueId: '' });
       showToast("REGISTRO POSTADO COM SUCESSO!");
-      pulse();
+      forcarAtualizacao();
     }
     setLoading(false);
   };
@@ -221,17 +213,12 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     await fetch('/api/registros/analise', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ 
-            registroId: id, 
-            acao, 
-            avaliadoPor: userSession?.user?.name || "Desconhecido" 
-        }) 
+        body: JSON.stringify({ registroId: id, acao, avaliadoPor: userSession?.user?.name || "Desconhecido" }) 
     });
-    pulse(); 
+    forcarAtualizacao(); 
     setLoading(false);
   };
 
-  // 👇 NOVA LÓGICA DE DELETAR COM O MODAL BONITO 👇
   const deletarLog = (id: string) => {
     setModalConfirmacao({
       aberto: true,
@@ -241,14 +228,13 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
       acao: async () => {
         setLoading(true);
         await fetch('/api/admin/logs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-        pulse();
+        forcarAtualizacao();
         setModalConfirmacao(null);
         setLoading(false);
       }
     });
   };
 
-  // 👇 NOVA LÓGICA DE VIRADA DE MÊS COM O MODAL BONITO 👇
   const virarMes = () => {
     setModalConfirmacao({
       aberto: true,
@@ -259,14 +245,13 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         setLoading(true);
         await fetch('/api/admin/virada', { method: 'POST' });
         showToast("MÊS FECHADO!");
-        pulse();
+        forcarAtualizacao();
         setModalConfirmacao(null);
         setLoading(false);
       }
     });
   };
 
-  // 👇 NOVA LÓGICA DE RESTAURAR COM O MODAL BONITO 👇
   const forcarAuditoria = () => {
     setModalConfirmacao({
       aberto: true,
@@ -277,7 +262,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         setLoading(true);
         await fetch('/api/admin/auditoria');
         showToast("SISTEMA RESTAURADO!");
-        pulse();
+        forcarAtualizacao();
         setModalConfirmacao(null);
         setLoading(false);
       }
@@ -290,7 +275,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     setLoading(true);
     const v = parseFloat(valorParcela.replace(',', '.')) || 0;
     await fetch('/api/registros/parcela', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registroId: modalParcela.id, valorPago: v, proximaData: proximoVencimento }) });
-    setModalParcela(null); setValorParcela(''); pulse();
+    setModalParcela(null); setValorParcela(''); forcarAtualizacao();
     setLoading(false);
   };
 
@@ -376,8 +361,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                   {activeTab === 'inicio' && (
                   <div className="animate-in fade-in slide-in-from-bottom-6 duration-500">
                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                        <StatCard title="VALOR BRUTO (MÊS)" value={equipeProcessada.reduce((a,m)=>a+m.bruto,0)} icon={<TrendingUp size={32}/>} type="money" />
-                        <StatCard title="VALOR LÍQUIDO (CAIXA)" value={equipeProcessada.reduce((a,m)=>a+m.liq,0)} icon={<Zap size={32}/>} type="money" highlight />
+                        <StatCard title="VALOR BRUTO (MÊS)" value={equipeProcessada.reduce((a:any,m:any)=>a+m.bruto,0)} icon={<TrendingUp size={32}/>} type="money" />
+                        <StatCard title="VALOR LÍQUIDO (CAIXA)" value={equipeProcessada.reduce((a:any,m:any)=>a+m.liq,0)} icon={<Zap size={32}/>} type="money" highlight />
                         <StatCard title="MEMBROS ATIVOS" value={equipe.length} icon={<Users size={32}/>} />
                      </div>
                      
@@ -391,7 +376,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                         </div>
                         
                         <div className="flex items-end gap-2 lg:gap-6 h-64 mt-8 pt-4">
-                           {equipeProcessada.slice(0, 5).map((m, i) => {
+                           {equipeProcessada.slice(0, 5).map((m:any) => {
                               const alturaPercent = m.bruto > 0 ? (m.bruto / maxBrutoGrafico) * 100 : 0;
                               const alturaAjustada = m.bruto > 0 ? Math.max(5, alturaPercent) : 0; 
                               return (
@@ -403,7 +388,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                                           style={{ height: `${alturaAjustada}%` }}
                                        ></div>
                                     </div>
-                                    <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 truncate w-full text-center mt-3 px-1 group-hover:text-white transition-colors" title={m.nome}>{m.nome}</div>
+                                    <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 truncate w-full text-center mt-3 px-1 group-hover:text-white transition-colors" title={m.nome}>{extractFirstName(m.nome)}</div>
                                  </div>
                               )
                            })}
@@ -420,7 +405,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                           <tr><th className="px-8 py-5">RANK</th><th className="px-8 py-5 text-center">AGENTE</th><th className="px-8 py-5 text-right">PRODUÇÃO (MÊS)</th></tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                          {equipeProcessada.map((m, i) => (
+                          {equipeProcessada.map((m:any, i:any) => (
                           <tr key={m.discordId} className="hover:bg-white/[0.02] transition-all group">
                               <td className="px-8 py-6 italic text-3xl text-zinc-700 group-hover:text-yellow-400/30 transition-colors w-24">{i + 1}º</td>
                               <td className="px-8 py-6 flex items-center justify-center gap-4 text-lg text-white italic tracking-tight"><img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000&bold=true`} className="w-10 h-10 rounded-xl" alt=""/> {m.nome}</td>
@@ -440,7 +425,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                           ))}
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                          {equipeFiltrada.map(m => (
+                          {equipeFiltrada.map((m:any) => (
                           <div key={m.discordId} onClick={() => setMembroSelecionado(m)} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-white/5 hover:border-yellow-400/40 cursor-pointer shadow-lg group transition-all hover:-translate-y-1">
                               <div className="flex items-center gap-5 mb-6">
                                   <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000&bold=true`} className="w-16 h-16 rounded-[1.2rem] border-2 border-zinc-800 group-hover:border-yellow-400 transition-colors shadow-md" alt="" />
@@ -506,9 +491,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                                     </button>
                                 </div>
                               )}
-                              {muralMesFiltrado.length === 0 && (
-                                <div className="p-12 text-center text-zinc-600 font-black text-xs uppercase tracking-[0.3em] italic">NENHUM RESULTADO ENCONTRADO.</div>
-                              )}
+                              {muralMesFiltrado.length === 0 && <div className="p-12 text-center text-zinc-600 font-black text-xs uppercase tracking-[0.3em] italic">NENHUM RESULTADO ENCONTRADO.</div>}
                           </div>
                       </div>
                   </div>
@@ -526,7 +509,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                           <label className="text-[11px] uppercase text-yellow-400 font-black tracking-widest ml-3">AGENTE RESPONSÁVEL</label>
                           <select value={form.vendedorId || form.recrutadoId || form.membroSaqueId} onChange={e => setForm({...form, vendedorId: e.target.value, recrutadoId: e.target.value, membroSaqueId: e.target.value})} className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-yellow-400 font-black uppercase text-sm appearance-none cursor-pointer shadow-inner" required>
                               <option value="">Selecione na equipe...</option>
-                              {equipeProcessada.map(m => <option key={m.discordId} value={m.discordId}>{m.nome} ({m.cargoReal})</option>)}
+                              {equipeProcessada.map((m:any) => <option key={m.discordId} value={m.discordId}>{m.nome} ({m.cargoReal})</option>)}
                           </select>
                           </div>
                           
@@ -560,7 +543,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                   {activeTab === 'pendencias' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
                       {pendencias.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Nenhuma cobrança ativa</p></div>}
-                      {pendencias.map(r => (
+                      {pendencias.map((r:any) => (
                       <div key={r.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-red-500/20 shadow-lg flex flex-col justify-between group relative overflow-hidden transition-all hover:border-red-500/40 hover:-translate-y-1">
                           <div className="absolute -top-4 -right-4 p-6 text-red-500/5 group-hover:text-red-500/10 transition-colors"><AlertCircle size={80}/></div>
                           <div className="relative z-10">
@@ -583,7 +566,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                   {activeTab === 'admin' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
                       {aguardando.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Fila limpa</p></div>}
-                      {aguardando.map(r => (
+                      {aguardando.map((r:any) => (
                       <div key={r.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-yellow-400/20 shadow-lg flex flex-col justify-between">
                           <div>
                               <h4 className="text-2xl text-white italic font-black uppercase mb-2 truncate tracking-tighter">{r.nome}</h4>
@@ -591,10 +574,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                               <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
                                   <p>CLIENTE: <span className="text-zinc-300 truncate inline-block max-w-[150px] align-bottom">{formatClientName(r)}</span></p>
                                   <p className="truncate">ITEM: <span className="text-zinc-300">{formatItemName(r)}</span></p>
-                                  
-                                  {r.criadoPor && (
-                                     <p className="pt-2 mt-2 border-t border-white/5 text-zinc-400 italic">POSTADO POR: <span className="text-white ml-1">{r.criadoPor}</span></p>
-                                  )}
+                                  {r.criadoPor && <p className="pt-2 mt-2 border-t border-white/5 text-zinc-400 italic">POSTADO POR: <span className="text-white ml-1">{r.criadoPor}</span></p>}
                               </div>
                           </div>
                           <div className="flex gap-3">
@@ -645,14 +625,12 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                                       <td className="px-8 py-5">
                                           <span className="text-zinc-500 border border-white/5 px-3 py-1.5 rounded-lg text-[9px]">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</span>
                                       </td>
-                                      
                                       <td className="px-8 py-5">
                                           <div className="flex flex-col gap-1.5">
                                              <span className="text-[9px] text-zinc-400 italic">📝 Postou: {r.criadoPor || 'Sistema'}</span>
                                              <span className="text-[9px] text-yellow-400/80 italic">🛡️ Aprovou: {r.avaliadoPor || 'N/A'}</span>
                                           </div>
                                       </td>
-
                                       <td className="px-8 py-5 text-right">
                                           <button onClick={() => deletarLog(r.id)} className="text-red-500/40 hover:text-red-500 p-2.5 bg-red-500/5 rounded-lg transition-all"><Trash2 size={16}/></button>
                                       </td>
@@ -678,7 +656,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                               <p className="text-[11px] font-black uppercase text-zinc-500 mb-3 tracking-[0.3em] italic">PERÍODO</p>
                               <select value={mesBackup} onChange={(e) => setMesBackup(e.target.value)} className="w-full bg-black border border-white/10 text-yellow-400 p-4 rounded-xl outline-none font-black uppercase text-sm cursor-pointer shadow-inner appearance-none">
                                   <option value="">Selecione...</option>
-                                  {mesesDisponiveis.map(m => <option key={m} value={m}>{formatMes(m)}</option>)}
+                                  {mesesDisponiveis.map((m:any) => <option key={m} value={m}>{formatMes(m)}</option>)}
                               </select>
                           </div>
                           <div className="flex-1 flex gap-5">
@@ -795,7 +773,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                  <div className="space-y-6">
                     <h3 className="text-xl font-black uppercase italic text-zinc-600 flex items-center gap-4 mb-8 tracking-[0.2em]"><History size={22} className="text-yellow-400"/> EXTRATO RECENTE</h3>
                     <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                        {registros.filter(r => String(r.discordId) === String(modalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && r.criado_em.startsWith(mesAtualStr)).map((r: any) => (
+                        {registros.filter((r:any) => String(r.discordId) === String(modalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && r.criado_em.startsWith(mesAtualStr)).map((r: any) => (
                           <div key={r.id} className="flex items-center bg-[#0a0a0a] p-6 rounded-[1.5rem] border border-white/5 hover:border-white/10 transition-all gap-4">
                              <div className="min-w-0 flex-1">
                                 <p className={`font-black text-sm uppercase italic mb-1 truncate max-w-[200px] lg:max-w-xs ${r.tipo === 'CORRIDINHA' ? 'text-blue-400' : r.tipo === 'SAQUE' ? 'text-red-400' : 'text-white'}`} title={formatItemName(r)}>{formatItemName(r)}</p>
@@ -841,7 +819,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </div>
       )}
 
-      {/* NOVO MODAL DE CONFIRMAÇÃO (Substitui o window.confirm feio do navegador) */}
+      {/* MODAL DE CONFIRMAÇÃO PADRÃO */}
       {modalConfirmacao && modalConfirmacao.aberto && (
          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-6 animate-in fade-in backdrop-blur-sm duration-300">
             <div className={`bg-[#0a0a0a] border ${modalConfirmacao.tipo === 'perigo' ? 'border-red-500/30' : 'border-purple-500/30'} p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl relative text-center flex flex-col items-center animate-in zoom-in-95`}>
@@ -875,7 +853,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   );
 }
 
-// COMPONENTES AUXILIARES
 function SkeletonCard() {
   return (
     <div className="p-8 lg:p-10 rounded-[2.5rem] bg-[#0a0a0a] border border-white/5 animate-pulse relative overflow-hidden flex flex-col justify-center h-40 shadow-lg">
