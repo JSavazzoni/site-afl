@@ -115,7 +115,18 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   const modalMember = membroSelecionado ? equipeProcessada.find(m => m.discordId === membroSelecionado.discordId) || membroSelecionado : null;
   
   const aguardando = registros.filter(r => r.status === 'PENDENTE');
-  const pendencias = registros.filter(r => (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.tipo === 'VENDA' || !r.tipo) && Number(r.valorRecebido) < Number(r.valor));
+  
+  // 👇 A MÁGICA DA ORDENAÇÃO ACONTECE AQUI 👇
+  const pendencias = registros
+    .filter(r => (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.tipo === 'VENDA' || !r.tipo) && Number(r.valorRecebido) < Number(r.valor))
+    .sort((a, b) => {
+      // Se a cobrança A não tiver data, vai pro final
+      if (!a.dataVencimento) return 1;
+      // Se a cobrança B não tiver data, vai pro final
+      if (!b.dataVencimento) return -1;
+      // Ordena cronologicamente: menor data (mais antiga/próxima a vencer) para maior data
+      return new Date(a.dataVencimento).getTime() - new Date(b.dataVencimento).getTime();
+    });
   
   const muralMes = registros.filter(r => 
     (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
@@ -215,7 +226,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </div>
       )}
 
-      {/* SIDEBAR */}
       <aside className="w-72 border-r border-white/5 bg-[#0a0a0a] p-8 flex flex-col z-50">
         <div className="flex items-center gap-4 mb-10 font-black italic text-2xl uppercase tracking-tighter">
           <div className="p-2.5 bg-yellow-400 rounded-xl text-black shadow-[0_0_25px_#facc15]"><UsersRound size={24}/></div>
@@ -252,9 +262,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </button>
       </aside>
 
-      {/* ÁREA PRINCIPAL */}
       <main className="flex-1 overflow-y-auto bg-[#050505] relative flex flex-col">
-        {/* CONTEÚDO PRINCIPAL COM PADDING */}
         <div className="p-10 lg:p-14 flex-1">
             <header className="mb-14 flex justify-between items-end border-b border-white/5 pb-8">
             <div>
@@ -272,7 +280,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             </div>
             </header>
 
-            {/* DASHBOARD */}
             {activeTab === 'inicio' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 animate-in fade-in slide-in-from-bottom-6 duration-500">
                 <StatCard title="VALOR BRUTO (MÊS)" value={equipeProcessada.reduce((a,m)=>a+m.bruto,0)} icon={<TrendingUp size={32}/>} type="money" />
@@ -281,7 +288,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             </div>
             )}
 
-            {/* RANKING */}
             {activeTab === 'ranking' && (
             <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl animate-in fade-in duration-500">
                 <table className="w-full text-left font-black uppercase">
@@ -301,7 +307,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             </div>
             )}
 
-            {/* EFETIVO */}
             {activeTab === 'equipe' && (
             <div className="animate-in fade-in duration-500">
                 <div className="flex gap-3 mb-8 overflow-x-auto pb-4 no-scrollbar">
@@ -331,7 +336,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             </div>
             )}
 
-            {/* MURAL */}
             {activeTab === 'gestao' && (
             <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl animate-in fade-in duration-500">
                 <div className="overflow-x-auto">
@@ -359,7 +363,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             </div>
             )}
 
-            {/* POSTAR */}
             {activeTab === 'registrar' && (
             <div className="max-w-3xl mx-auto animate-in zoom-in-95 duration-300">
                 <div className="flex gap-2 p-1.5 bg-[#0a0a0a] rounded-[1.5rem] mb-8 border border-white/5 shadow-lg">
@@ -398,7 +401,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             </div>
             )}
 
-            {/* PENDENCIAS */}
             {activeTab === 'pendencias' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
                 {pendencias.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Nenhuma cobrança ativa</p></div>}
@@ -422,7 +424,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             </div>
             )}
 
-            {/* APROVACOES */}
             {activeTab === 'admin' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
                 {aguardando.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Fila limpa</p></div>}
@@ -445,7 +446,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             </div>
             )}
 
-            {/* ADMIN ZONE */}
             {activeTab === 'admin_zone' && (
             <div className="space-y-10 animate-in fade-in duration-500">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -490,7 +490,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             </div>
             )}
 
-            {/* HISTORICO BACKUP */}
             {activeTab === 'historico_backup' && (
             <div className="space-y-8 animate-in fade-in duration-500">
                 <div className="flex flex-col md:flex-row md:items-center gap-6 bg-[#0a0a0a] p-8 rounded-[2.5rem] border border-white/5 shadow-lg">
@@ -534,7 +533,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             )}
         </div>
 
-        {/* FOOTER DESENVOLVIDO POR VZ - AGORA CENTRALIZADO NO FIM DA PÁGINA */}
         <footer className="mt-auto pb-8 pt-8 flex flex-col items-center justify-center pointer-events-none opacity-40 w-full border-t border-white/5">
            <p className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500 italic mb-1 text-center">
               © {new Date().getFullYear()} AFL PAINEL • TODOS OS DIREITOS RESERVADOS
@@ -546,7 +544,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
       </main>
 
-      {/* --- MODAL DETALHADO DO MEMBRO --- */}
       {membroSelecionado && modalMember && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-6 sm:p-10 animate-in fade-in backdrop-blur-sm duration-300">
            <div className="bg-[#050505] border border-white/10 w-full max-w-5xl rounded-[3rem] flex flex-col max-h-[90vh] overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.8)]">
@@ -618,7 +615,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </div>
       )}
 
-      {/* MODAL RECEBER PARCELA */}
       {modalParcela && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 p-6 animate-in zoom-in-95 duration-300">
            <div className="bg-[#0a0a0a] border border-zinc-800 p-12 rounded-[3rem] w-full max-w-xl shadow-2xl relative">
