@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, Trophy, PlusCircle, ShieldCheck, TrendingUp, Users, 
   LogOut, UsersRound, X, History, CheckCircle2, Database, Clock, 
-  ShoppingCart, UserPlus, Zap, Banknote, AlertCircle, Trash2, ShieldAlert, Archive
+  ShoppingCart, Zap, Banknote, AlertCircle, Trash2, ShieldAlert, Archive, Search, ChevronDown
 } from 'lucide-react';
 import { signOut } from "next-auth/react";
 
@@ -22,9 +22,20 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   const [selectedCargo, setSelectedCargo] = useState('Todos');
   const [registros, setRegistros] = useState<any[]>([]);
   const [equipe, setEquipe] = useState<any[]>([]);
-  const [isAdmin, setIsAdmin] = useState(initialIsAdmin || false);
+  const [isAdmin] = useState(initialIsAdmin || false);
   const [loading, setLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
+  
+  // ESTADOS DE BUSCA E PAGINAÇÃO (20 em 20)
+  const [termoMural, setTermoMural] = useState('');
+  const [limiteMural, setLimiteMural] = useState(20);
+  
+  const [termoLogs, setTermoLogs] = useState('');
+  const [limiteLogs, setLimiteLogs] = useState(20);
+
+  const [termoHistorico, setTermoHistorico] = useState('');
+  const [limiteHistorico, setLimiteHistorico] = useState(20);
   
   const [membroSelecionado, setMembroSelecionado] = useState<any>(null);
   const [modalParcela, setModalParcela] = useState<any>(null);
@@ -47,14 +58,15 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   };
 
   const pulse = useCallback(async () => {
-    const v = Date.now(); 
     try {
+      const v = Date.now();
       const [resE, resR] = await Promise.all([
         fetch(`/api/equipe?v=${v}`, { cache: 'no-store' }),
         fetch(`/api/registros?v=${v}`, { cache: 'no-store' })
       ]);
       if (resE.ok) setEquipe(await resE.json());
       if (resR.ok) setRegistros(await resR.json());
+      setIsInitialLoad(false); 
     } catch {}
   }, []);
 
@@ -93,7 +105,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     );
 
     const bruto = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !isParcela(r.item)).reduce((a, r) => a + (Number(r.valor) || 0), 0);
-    
     const liqVendas = regsMes.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a, r) => a + (Number(r.valorRecebido) || 0), 0);
     const liqParcelas = regsMes.filter(r => isParcela(r.item)).reduce((a, r) => a + extractVal(r), 0);
     const liq = liqVendas + liqParcelas;
@@ -113,47 +124,73 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
   const equipeFiltrada = selectedCargo === 'Todos' ? equipeProcessada : equipeProcessada.filter(m => m.cargoReal === selectedCargo);
   const modalMember = membroSelecionado ? equipeProcessada.find(m => m.discordId === membroSelecionado.discordId) || membroSelecionado : null;
-  
   const aguardando = registros.filter(r => r.status === 'PENDENTE');
-  
   const pendencias = registros
     .filter(r => (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.tipo === 'VENDA' || !r.tipo) && Number(r.valorRecebido) < Number(r.valor))
     .sort((a, b) => {
-      // Se a cobrança A não tiver data, vai pro final
       if (!a.dataVencimento) return 1;
-      // Se a cobrança B não tiver data, vai pro final
       if (!b.dataVencimento) return -1;
-      
-      // Compara direto o texto YYYY-MM-DD (À prova de bugs de fuso horário)
       return String(a.dataVencimento).localeCompare(String(b.dataVencimento));
     });
   
-  const muralMes = registros.filter(r => 
+  // MURAL FILTRADO E PAGINADO
+  const muralMesFiltrado = registros.filter(r => 
     (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
     r.criado_em && r.criado_em.startsWith(mesAtualStr) &&
     !(r.item || '').toUpperCase().includes('SALDO RETIDO') &&
     !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')
-  ).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
+  ).filter(r => {
+    if (termoMural === '') return true;
+    const busca = termoMural.toLowerCase();
+    return formatClientName(r).toLowerCase().includes(busca) || 
+           formatItemName(r).toLowerCase().includes(busca) || 
+           (r.nome && r.nome.toLowerCase().includes(busca));
+  }).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
 
+  // LOGS FILTRADOS E PAGINADOS
+  const logsFiltrados = registros.filter(r => r.status === 'APROVADO').filter(r => {
+    if (termoLogs === '') return true;
+    const busca = termoLogs.toLowerCase();
+    return (r.nome || '').toLowerCase().includes(busca) || 
+           (r.item || '').toLowerCase().includes(busca) || 
+           (r.tipo || '').toLowerCase().includes(busca);
+  }).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
+
+  // HISTÓRICO FILTRADO E PAGINADO
   const mesesDisponiveis = Array.from(new Set(registros.map(r => r.criado_em?.substring(0, 7)))).filter(Boolean).sort().reverse();
   const registrosDoMesBackup = registros.filter(r => r.criado_em?.startsWith(mesBackup));
+  
+  const historicoFiltrado = registrosDoMesBackup.filter(r => {
+    if (termoHistorico === '') return true;
+    const busca = termoHistorico.toLowerCase();
+    return (r.nome || '').toLowerCase().includes(busca) || 
+           (r.item || '').toLowerCase().includes(busca) || 
+           (r.tipo || '').toLowerCase().includes(busca);
+  }).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
+
   const backupBruto = registrosDoMesBackup.filter(r => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a,r) => a + (Number(r.valor) || 0), 0);
   const backupLiquido = registrosDoMesBackup.filter(r => r.tipo === 'VENDA' || !r.tipo).reduce((a,r) => a + (isParcela(r.item) ? extractVal(r) : (Number(r.valorRecebido) || 0)), 0);
 
+  const maxBrutoGrafico = Math.max(...equipeProcessada.map(m => m.bruto), 1);
+
+  // LÓGICA DO FORMULÁRIO CONDICIONAL
+  const valTotalForm = parseFloat(form.valor.replace(',', '.')) || 0;
+  const valRecebidoForm = form.valorRecebido !== '' ? parseFloat(form.valorRecebido.replace(',', '.')) : valTotalForm;
+  const mostrarDataVencimento = valRecebidoForm < valTotalForm; 
+
   const handleEnviar = async (e: any) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
-    const valLimpo = parseFloat(form.valor.replace(',', '.')) || 0;
-    const recLimpo = form.valorRecebido ? parseFloat(form.valorRecebido.replace(',', '.')) : valLimpo;
     const m = equipe.find((m: any) => String(m.discordId) === String(form.vendedorId || form.recrutadoId || form.membroSaqueId));
 
     const payload = { 
       ...form, 
       item: form.tipo === 'CORRIDINHA' ? 'BÔNUS: CORRIDINHA MALUCA' : form.tipo === 'SAQUE' ? 'PAGAMENTO REALIZADO' : (form.item || 'N/A'),
       cliente: form.tipo === 'CORRIDINHA' ? 'EQUIPE AFL' : form.tipo === 'SAQUE' ? 'FINANCEIRO AFL' : (form.cliente || 'N/A'),
-      valorNumerico: form.tipo === 'CORRIDINHA' ? 0 : valLimpo,
-      recebidoNumerico: form.tipo === 'CORRIDINHA' ? 0 : recLimpo,
-      cashbackExtra: form.tipo === 'CORRIDINHA' ? valLimpo : 0,
+      valorNumerico: form.tipo === 'CORRIDINHA' ? 0 : valTotalForm,
+      recebidoNumerico: form.tipo === 'CORRIDINHA' ? 0 : valRecebidoForm,
+      cashbackExtra: form.tipo === 'CORRIDINHA' ? valTotalForm : 0,
       vendedorNome: m?.nome 
     };
 
@@ -167,8 +204,11 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   };
 
   const decidir = async (id: string, acao: 'APROVAR' | 'REPROVAR') => {
+    if (loading) return;
+    setLoading(true);
     await fetch('/api/registros/analise', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registroId: id, acao }) });
     pulse(); 
+    setLoading(false);
   };
 
   const deletarLog = async (id: string) => {
@@ -197,6 +237,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
   const handlePagarParcela = async (e: any) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     const v = parseFloat(valorParcela.replace(',', '.')) || 0;
     await fetch('/api/registros/parcela', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registroId: modalParcela.id, valorPago: v, proximaData: proximoVencimento }) });
@@ -208,10 +249,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     <div className="flex min-h-screen bg-[#050505] text-white font-sans selection:bg-yellow-400 overflow-hidden">
       
       <style dangerouslySetInnerHTML={{__html: `
-        html, body, * {
-          scrollbar-width: thin !important;
-          scrollbar-color: #3f3f46 transparent !important;
-        }
+        html, body, * { scrollbar-width: thin !important; scrollbar-color: #3f3f46 transparent !important; }
         ::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
@@ -236,7 +274,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
           <NavItem label="DASHBOARD" icon={<LayoutDashboard size={18}/>} active={activeTab === 'inicio'} onClick={() => setActiveTab('inicio')} />
           <NavItem label="RANKING" icon={<Trophy size={18}/>} active={activeTab === 'ranking'} onClick={() => setActiveTab('ranking')} />
           <NavItem label="EFETIVO" icon={<Users size={18}/>} active={activeTab === 'equipe'} onClick={() => setActiveTab('equipe')} />
-          <NavItem label="MURAL" icon={<History size={18}/>} active={activeTab === 'gestao'} onClick={() => setActiveTab('gestao')} />
+          <NavItem label="MURAL" icon={<History size={18}/>} active={activeTab === 'gestao'} onClick={() => { setActiveTab('gestao'); setLimiteMural(20); }} />
           
           {isAdmin && (
             <div className="pt-6 mt-6 border-t border-white/5 space-y-2">
@@ -244,7 +282,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
               
               <button onClick={() => setActiveTab('pendencias')} className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all ${activeTab === 'pendencias' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
                 <div className="flex items-center gap-4"><Clock size={18}/> <span className="font-black text-[11px] tracking-widest uppercase">PENDÊNCIAS</span></div>
-                {pendencias.length > 0 && <span className="bg-red-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-lg shadow-red-600/40">{pendencias.length}</span>}
+                {pendencias.length > 0 && <span className="bg-red-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-lg shadow-red-600/40 animate-pulse">{pendencias.length}</span>}
               </button>
 
               <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all ${activeTab === 'admin' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
@@ -252,8 +290,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                 {aguardando.length > 0 && <span className="bg-yellow-400 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-lg shadow-yellow-400/20">{aguardando.length}</span>}
               </button>
 
-              <NavItem label="ADMINISTRAÇÃO" icon={<ShieldAlert size={18}/>} active={activeTab === 'admin_zone'} onClick={() => setActiveTab('admin_zone')} color="text-red-500" />
-              <NavItem label="HISTÓRICO" icon={<Archive size={18}/>} active={activeTab === 'historico_backup'} onClick={() => setActiveTab('historico_backup')} color="text-zinc-400" />
+              <NavItem label="ADMINISTRAÇÃO" icon={<ShieldAlert size={18}/>} active={activeTab === 'admin_zone'} onClick={() => { setActiveTab('admin_zone'); setLimiteLogs(20); }} color="text-red-500" />
+              <NavItem label="HISTÓRICO" icon={<Archive size={18}/>} active={activeTab === 'historico_backup'} onClick={() => { setActiveTab('historico_backup'); setLimiteHistorico(20); }} color="text-zinc-400" />
             </div>
           )}
         </nav>
@@ -280,256 +318,364 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
             </div>
             </header>
 
-            {activeTab === 'inicio' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 animate-in fade-in slide-in-from-bottom-6 duration-500">
-                <StatCard title="VALOR BRUTO (MÊS)" value={equipeProcessada.reduce((a,m)=>a+m.bruto,0)} icon={<TrendingUp size={32}/>} type="money" />
-                <StatCard title="VALOR LÍQUIDO (CAIXA)" value={equipeProcessada.reduce((a,m)=>a+m.liq,0)} icon={<Zap size={32}/>} type="money" highlight />
-                <StatCard title="MEMBROS ATIVOS" value={equipe.length} icon={<Users size={32}/>} />
-            </div>
-            )}
-
-            {activeTab === 'ranking' && (
-            <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl animate-in fade-in duration-500">
-                <table className="w-full text-left font-black uppercase">
-                <thead className="bg-yellow-400 text-black text-[11px] tracking-[0.2em]">
-                    <tr><th className="px-8 py-5">RANK</th><th className="px-8 py-5 text-center">AGENTE</th><th className="px-8 py-5 text-right">PRODUÇÃO (MÊS)</th></tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                    {equipeProcessada.map((m, i) => (
-                    <tr key={m.discordId} className="hover:bg-white/[0.02] transition-all group">
-                        <td className="px-8 py-6 italic text-3xl text-zinc-700 group-hover:text-yellow-400/30 transition-colors w-24">{i + 1}º</td>
-                        <td className="px-8 py-6 flex items-center justify-center gap-4 text-lg text-white italic tracking-tight"><img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000&bold=true`} className="w-10 h-10 rounded-xl" alt=""/> {m.nome}</td>
-                        <td className="px-8 py-6 text-right text-yellow-400 text-2xl font-mono italic">R$ {formatMoney(m.bruto)}</td>
-                    </tr>
-                    ))}
-                </tbody>
-                </table>
-            </div>
-            )}
-
-            {activeTab === 'equipe' && (
-            <div className="animate-in fade-in duration-500">
-                <div className="flex gap-3 mb-8 overflow-x-auto pb-4 no-scrollbar">
-                    {['Todos', ...HIERARQUIA].map(c => (
-                    <button key={c} onClick={() => setSelectedCargo(c)} className={`px-6 py-3 rounded-full text-[11px] font-black uppercase transition-all whitespace-nowrap tracking-widest ${selectedCargo === c ? 'bg-yellow-400 text-black shadow-[0_0_15px_rgba(250,204,21,0.3)]' : 'bg-[#0a0a0a] text-zinc-500 border border-white/5 hover:text-white hover:bg-white/5'}`}>{c}</button>
-                    ))}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                    {equipeFiltrada.map(m => (
-                    <div key={m.discordId} onClick={() => setMembroSelecionado(m)} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-white/5 hover:border-yellow-400/40 cursor-pointer shadow-lg group transition-all hover:-translate-y-1">
-                        <div className="flex items-center gap-5 mb-6">
-                            <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000&bold=true`} className="w-16 h-16 rounded-[1.2rem] border-2 border-zinc-800 group-hover:border-yellow-400 transition-colors shadow-md" alt="" />
-                            <div className="flex-1 min-w-0">
-                                <h4 className="font-black uppercase text-white text-xl truncate tracking-tight">{m.nome}</h4>
-                                <p className="text-[9px] text-yellow-400 font-bold mt-1 italic tracking-[0.2em] opacity-90 truncate">{m.cargoReal}</p>
-                            </div>
+            {isInitialLoad ? (
+               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+                  <SkeletonCard /><SkeletonCard /><SkeletonCard />
+               </div>
+            ) : (
+               <>
+                  {activeTab === 'inicio' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-6 duration-500">
+                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+                        <StatCard title="VALOR BRUTO (MÊS)" value={equipeProcessada.reduce((a,m)=>a+m.bruto,0)} icon={<TrendingUp size={32}/>} type="money" />
+                        <StatCard title="VALOR LÍQUIDO (CAIXA)" value={equipeProcessada.reduce((a,m)=>a+m.liq,0)} icon={<Zap size={32}/>} type="money" highlight />
+                        <StatCard title="MEMBROS ATIVOS" value={equipe.length} icon={<Users size={32}/>} />
+                     </div>
+                     
+                     <div className="mt-8 bg-[#0a0a0a] border border-white/5 p-8 lg:p-10 rounded-[2.5rem] shadow-xl">
+                        <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-6">
+                           <div>
+                              <h3 className="text-2xl font-black italic text-white uppercase tracking-tighter">Desempenho da Equipe</h3>
+                              <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] mt-1">Top 5 Maiores Vendedores</p>
+                           </div>
+                           <Trophy className="text-yellow-400/20" size={32}/>
                         </div>
                         
-                        <div className="pt-6 border-t border-white/5 space-y-3 text-[10px] font-black uppercase tracking-widest">
-                        <div className="flex justify-between text-zinc-500"><span>BRUTO:</span><span className="text-white font-mono text-sm">R$ {formatMoney(m.bruto)}</span></div>
-                        <div className="flex justify-between text-green-500/80"><span>LÍQUIDO:</span><span className="text-green-400 font-mono text-sm">R$ {formatMoney(m.liq)}</span></div>
-                        <div className="flex justify-between text-yellow-400 bg-yellow-400/5 px-3 py-3 rounded-xl mt-4 border border-yellow-400/10 items-center"><span>SALDO:</span><span className="font-mono text-base">R$ {formatMoney(m.saldoReal)}</span></div>
+                        {/* GRÁFICO CORRIGIDO (h-64 para ter altura, e colunas com h-full) */}
+                        <div className="flex items-end gap-2 lg:gap-6 h-64 mt-8 pt-4">
+                           {equipeProcessada.slice(0, 5).map((m, i) => {
+                              const alturaPercent = m.bruto > 0 ? (m.bruto / maxBrutoGrafico) * 100 : 0;
+                              // Garante no mínimo 5% de altura se o agente vendeu algo, para não ficar zerado visualmente
+                              const alturaAjustada = m.bruto > 0 ? Math.max(5, alturaPercent) : 0; 
+                              return (
+                                 <div key={m.discordId} className="flex-1 flex flex-col justify-end items-center group h-full">
+                                    <div className="text-[10px] lg:text-xs font-mono font-black italic text-zinc-600 group-hover:text-yellow-400 transition-colors mb-3">R$ {formatMoney(m.bruto)}</div>
+                                    
+                                    {/* CONTAINER DA BARRA */}
+                                    <div className="w-full max-w-[80px] bg-white/[0.02] rounded-t-2xl border border-white/5 border-b-0 relative flex-1 flex flex-col justify-end overflow-hidden group-hover:border-yellow-400/20 transition-all">
+                                       <div 
+                                          className="w-full bg-gradient-to-t from-yellow-600 to-yellow-400 rounded-t-xl transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(250,204,21,0.2)] group-hover:brightness-110" 
+                                          style={{ height: `${alturaAjustada}%` }}
+                                       ></div>
+                                    </div>
+                                    
+                                    {/* NOME COMPLETO COM TRUNCATE PARA NÃO BUGAR A TELA */}
+                                    <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 truncate w-full text-center mt-3 px-1 group-hover:text-white transition-colors" title={m.nome}>{m.nome}</div>
+                                 </div>
+                              )
+                           })}
+                           {equipeProcessada.length === 0 && <div className="w-full h-full flex items-center justify-center text-zinc-600 text-xs font-black uppercase tracking-widest italic">Sem dados suficientes</div>}
                         </div>
-                    </div>
-                    ))}
-                </div>
-            </div>
-            )}
+                     </div>
+                  </div>
+                  )}
 
-            {activeTab === 'gestao' && (
-            <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl animate-in fade-in duration-500">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
-                    <thead className="bg-white/5 text-zinc-500 border-b border-white/5">
-                        <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5">CLIENTE / ITEM</th><th className="px-8 py-5 text-right">VALOR</th><th className="px-8 py-5 text-right">DATA</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {muralMes.map((r: any) => (
-                        <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
-                            <td className="px-8 py-5 text-white text-xs italic group-hover:text-yellow-400 transition-colors">{r.nome}</td>
-                            <td className="px-8 py-5">
-                                <span className={`px-3 py-1.5 rounded-lg text-[9px] border ${r.tipo === 'SAQUE' ? 'text-red-500 border-red-500/20 bg-red-500/5' : r.tipo === 'CORRIDINHA' ? 'text-blue-400 border-blue-400/20 bg-blue-400/5' : 'text-yellow-400 border-yellow-400/20 bg-yellow-400/5'}`}>
-                                    {r.tipo || 'VENDA'}
-                                </span>
-                            </td>
-                            <td className="px-8 py-5 text-zinc-400 italic text-xs max-w-[250px] truncate">{formatClientName(r)} | {formatItemName(r)}</td>
-                            <td className={`px-8 py-5 font-mono text-sm text-right whitespace-nowrap ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
-                            <td className="px-8 py-5 text-zinc-600 text-[10px] text-right">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
-                        </tr>
-                        ))}
-                    </tbody>
-                    </table>
-                </div>
-            </div>
-            )}
+                  {activeTab === 'ranking' && (
+                  <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl animate-in fade-in duration-500">
+                      <table className="w-full text-left font-black uppercase">
+                      <thead className="bg-yellow-400 text-black text-[11px] tracking-[0.2em]">
+                          <tr><th className="px-8 py-5">RANK</th><th className="px-8 py-5 text-center">AGENTE</th><th className="px-8 py-5 text-right">PRODUÇÃO (MÊS)</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                          {equipeProcessada.map((m, i) => (
+                          <tr key={m.discordId} className="hover:bg-white/[0.02] transition-all group">
+                              <td className="px-8 py-6 italic text-3xl text-zinc-700 group-hover:text-yellow-400/30 transition-colors w-24">{i + 1}º</td>
+                              <td className="px-8 py-6 flex items-center justify-center gap-4 text-lg text-white italic tracking-tight"><img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000&bold=true`} className="w-10 h-10 rounded-xl" alt=""/> {m.nome}</td>
+                              <td className="px-8 py-6 text-right text-yellow-400 text-2xl font-mono italic">R$ {formatMoney(m.bruto)}</td>
+                          </tr>
+                          ))}
+                      </tbody>
+                      </table>
+                  </div>
+                  )}
 
-            {activeTab === 'registrar' && (
-            <div className="max-w-3xl mx-auto animate-in zoom-in-95 duration-300">
-                <div className="flex gap-2 p-1.5 bg-[#0a0a0a] rounded-[1.5rem] mb-8 border border-white/5 shadow-lg">
-                    {[{id:'VENDA', label:'VENDA', icon:<ShoppingCart size={16}/>}, {id:'CORRIDINHA', label:'BÔNUS', icon:<Zap size={16}/>}, {id:'SAQUE', label:'PAGAMENTO', icon:<Banknote size={16}/>}].map(t => (
-                    <button key={t.id} onClick={() => setForm({...form, tipo: t.id})} className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-[11px] font-black tracking-[0.2em] transition-all ${form.tipo === t.id ? 'bg-yellow-400 text-black shadow-md' : 'text-zinc-600 hover:text-white'}`}>{t.icon}{t.label}</button>
-                    ))}
-                </div>
-                <form onSubmit={handleEnviar} className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl space-y-6">
-                    <div className="space-y-3">
-                    <label className="text-[11px] uppercase text-yellow-400 font-black tracking-widest ml-3">AGENTE RESPONSÁVEL</label>
-                    <select value={form.vendedorId || form.recrutadoId || form.membroSaqueId} onChange={e => setForm({...form, vendedorId: e.target.value, recrutadoId: e.target.value, membroSaqueId: e.target.value})} className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-yellow-400 font-black uppercase text-sm appearance-none cursor-pointer shadow-inner" required>
-                        <option value="">Selecione na equipe...</option>
-                        {equipeProcessada.map(m => <option key={m.discordId} value={m.discordId}>{m.nome} ({m.cargoReal})</option>)}
-                    </select>
-                    </div>
-                    
-                    {form.tipo === 'VENDA' && (
-                    <div className="space-y-6 animate-in fade-in duration-500">
-                        <InputField label="CLIENTE (NOME / ID)" value={form.cliente} onChange={(v:any)=>setForm({...form, cliente: v})} placeholder="Ex: Lucas | 4116" />
-                        <InputField label="ITEM COMPRADO" value={form.item} onChange={(v:any)=>setForm({...form, item: v})} placeholder="Ex: Farm de Dinheiro" />
-                        <div className="grid grid-cols-2 gap-5">
-                        <InputField label="VALOR TOTAL (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="0,00" />
-                        <InputField label="VALOR RECEBIDO (R$)" type="number" value={form.valorRecebido} onChange={(v:any)=>setForm({...form, valorRecebido: v})} placeholder="0,00" />
+                  {activeTab === 'equipe' && (
+                  <div className="animate-in fade-in duration-500">
+                      <div className="flex gap-3 mb-8 overflow-x-auto pb-4 no-scrollbar">
+                          {['Todos', ...HIERARQUIA].map(c => (
+                          <button key={c} onClick={() => setSelectedCargo(c)} className={`px-6 py-3 rounded-full text-[11px] font-black uppercase transition-all whitespace-nowrap tracking-widest ${selectedCargo === c ? 'bg-yellow-400 text-black shadow-[0_0_15px_rgba(250,204,21,0.3)]' : 'bg-[#0a0a0a] text-zinc-500 border border-white/5 hover:text-white hover:bg-white/5'}`}>{c}</button>
+                          ))}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                          {equipeFiltrada.map(m => (
+                          <div key={m.discordId} onClick={() => setMembroSelecionado(m)} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-white/5 hover:border-yellow-400/40 cursor-pointer shadow-lg group transition-all hover:-translate-y-1">
+                              <div className="flex items-center gap-5 mb-6">
+                                  <img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000&bold=true`} className="w-16 h-16 rounded-[1.2rem] border-2 border-zinc-800 group-hover:border-yellow-400 transition-colors shadow-md" alt="" />
+                                  <div className="flex-1 min-w-0">
+                                      <h4 className="font-black uppercase text-white text-xl truncate tracking-tight" title={m.nome}>{m.nome}</h4>
+                                      <p className="text-[9px] text-yellow-400 font-bold mt-1 italic tracking-[0.2em] opacity-90 truncate">{m.cargoReal}</p>
+                                  </div>
+                              </div>
+                              
+                              <div className="pt-6 border-t border-white/5 space-y-3 text-[10px] font-black uppercase tracking-widest">
+                              <div className="flex justify-between text-zinc-500"><span>BRUTO:</span><span className="text-white font-mono text-sm">R$ {formatMoney(m.bruto)}</span></div>
+                              <div className="flex justify-between text-green-500/80"><span>LÍQUIDO:</span><span className="text-green-400 font-mono text-sm">R$ {formatMoney(m.liq)}</span></div>
+                              <div className="flex justify-between text-yellow-400 bg-yellow-400/5 px-3 py-3 rounded-xl mt-4 border border-yellow-400/10 items-center"><span>SALDO:</span><span className="font-mono text-base">R$ {formatMoney(m.saldoReal)}</span></div>
+                              </div>
+                          </div>
+                          ))}
+                      </div>
+                  </div>
+                  )}
+
+                  {activeTab === 'gestao' && (
+                  <div className="animate-in fade-in duration-500">
+                      <div className="mb-6 flex relative group w-full md:w-96">
+                        <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none text-zinc-500 group-focus-within:text-yellow-400 transition-colors">
+                            <Search size={18} />
                         </div>
-                        <InputField label="DATA VENCIMENTO (OPCIONAL)" type="date" value={form.dataVencimento} onChange={(v:any)=>setForm({...form, dataVencimento: v})} required={false} />
-                    </div>
-                    )}
+                        <input 
+                            type="text" 
+                            value={termoMural}
+                            onChange={(e) => { setTermoMural(e.target.value); setLimiteMural(20); }}
+                            placeholder="PESQUISAR CLIENTE, AGENTE OU ITEM..." 
+                            className="w-full bg-[#0a0a0a] border border-white/5 p-4 pl-14 rounded-2xl text-white outline-none focus:border-yellow-400/50 font-black text-[10px] tracking-[0.2em] uppercase transition-all shadow-lg placeholder:text-zinc-700" 
+                        />
+                      </div>
 
-                    {form.tipo === 'CORRIDINHA' && <div className="animate-in slide-in-from-top-4 duration-300"><InputField label="VALOR DO BÔNUS (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="Ex: 50,00" /></div>}
-                    {form.tipo === 'SAQUE' && <div className="animate-in slide-in-from-top-4 duration-300"><InputField label="DINHEIRO TRANSFERIDO (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="Valor pago no Pix" /></div>}
+                      <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl">
+                          <div className="overflow-x-auto">
+                              <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
+                              <thead className="bg-white/5 text-zinc-500 border-b border-white/5">
+                                  <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5">CLIENTE / ITEM</th><th className="px-8 py-5 text-right">VALOR</th><th className="px-8 py-5 text-right">DATA</th></tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5">
+                                  {muralMesFiltrado.slice(0, limiteMural).map((r: any) => (
+                                  <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
+                                      <td className="px-8 py-5 text-white text-xs italic group-hover:text-yellow-400 transition-colors">{r.nome}</td>
+                                      <td className="px-8 py-5">
+                                          <span className={`px-3 py-1.5 rounded-lg text-[9px] border ${r.tipo === 'SAQUE' ? 'text-red-500 border-red-500/20 bg-red-500/5' : r.tipo === 'CORRIDINHA' ? 'text-blue-400 border-blue-400/20 bg-blue-400/5' : 'text-yellow-400 border-yellow-400/20 bg-yellow-400/5'}`}>
+                                              {r.tipo || 'VENDA'}
+                                          </span>
+                                      </td>
+                                      <td className="px-8 py-5 text-zinc-400 italic text-xs max-w-[250px] truncate">{formatClientName(r)} | {formatItemName(r)}</td>
+                                      <td className={`px-8 py-5 font-mono text-sm text-right whitespace-nowrap ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
+                                      <td className="px-8 py-5 text-zinc-600 text-[10px] text-right">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
+                                  </tr>
+                                  ))}
+                              </tbody>
+                              </table>
+                              
+                              {muralMesFiltrado.length > limiteMural && (
+                                <div className="p-4 border-t border-white/5 flex justify-center bg-black/20">
+                                    <button onClick={() => setLimiteMural(prev => prev + 20)} className="flex items-center gap-2 text-[10px] text-zinc-500 hover:text-yellow-400 font-black uppercase tracking-[0.3em] px-6 py-3 rounded-xl hover:bg-white/5 transition-all">
+                                      CARREGAR MAIS <ChevronDown size={14} />
+                                    </button>
+                                </div>
+                              )}
+                              {muralMesFiltrado.length === 0 && (
+                                <div className="p-12 text-center text-zinc-600 font-black text-xs uppercase tracking-[0.3em] italic">NENHUM RESULTADO ENCONTRADO.</div>
+                              )}
+                          </div>
+                      </div>
+                  </div>
+                  )}
 
-                    <button disabled={loading} className="w-full bg-yellow-400 text-black font-black py-5 rounded-2xl uppercase tracking-[0.3em] text-sm shadow-lg mt-8 hover:bg-yellow-300 transition-all active:scale-95">
-                    {loading ? 'PROCESSANDO...' : 'ENVIAR REGISTRO'}
-                    </button>
-                </form>
-            </div>
-            )}
+                  {activeTab === 'registrar' && (
+                  <div className="max-w-3xl mx-auto animate-in zoom-in-95 duration-300">
+                      <div className="flex gap-2 p-1.5 bg-[#0a0a0a] rounded-[1.5rem] mb-8 border border-white/5 shadow-lg">
+                          {[{id:'VENDA', label:'VENDA', icon:<ShoppingCart size={16}/>}, {id:'CORRIDINHA', label:'BÔNUS', icon:<Zap size={16}/>}, {id:'SAQUE', label:'PAGAMENTO', icon:<Banknote size={16}/>}].map(t => (
+                          <button key={t.id} onClick={() => setForm({...form, tipo: t.id})} className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-[11px] font-black tracking-[0.2em] transition-all ${form.tipo === t.id ? 'bg-yellow-400 text-black shadow-md' : 'text-zinc-600 hover:text-white'}`}>{t.icon}{t.label}</button>
+                          ))}
+                      </div>
+                      <form onSubmit={handleEnviar} className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl space-y-6">
+                          <div className="space-y-3">
+                          <label className="text-[11px] uppercase text-yellow-400 font-black tracking-widest ml-3">AGENTE RESPONSÁVEL</label>
+                          <select value={form.vendedorId || form.recrutadoId || form.membroSaqueId} onChange={e => setForm({...form, vendedorId: e.target.value, recrutadoId: e.target.value, membroSaqueId: e.target.value})} className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-yellow-400 font-black uppercase text-sm appearance-none cursor-pointer shadow-inner" required>
+                              <option value="">Selecione na equipe...</option>
+                              {equipeProcessada.map(m => <option key={m.discordId} value={m.discordId}>{m.nome} ({m.cargoReal})</option>)}
+                          </select>
+                          </div>
+                          
+                          {form.tipo === 'VENDA' && (
+                          <div className="space-y-6 animate-in fade-in duration-500">
+                              <InputField label="CLIENTE (NOME / ID)" value={form.cliente} onChange={(v:any)=>setForm({...form, cliente: v})} placeholder="Ex: Lucas | 4116" />
+                              <InputField label="ITEM COMPRADO" value={form.item} onChange={(v:any)=>setForm({...form, item: v})} placeholder="Ex: Farm de Dinheiro" />
+                              <div className="grid grid-cols-2 gap-5">
+                                 <InputField label="VALOR TOTAL (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="0,00" />
+                                 <InputField label="VALOR RECEBIDO (R$)" type="number" value={form.valorRecebido} onChange={(v:any)=>setForm({...form, valorRecebido: v})} placeholder="0,00" />
+                              </div>
+                              
+                              {mostrarDataVencimento && (
+                                 <div className="animate-in slide-in-from-top-4 fade-in duration-300">
+                                    <InputField label="DATA VENCIMENTO (PENDÊNCIA)" type="date" value={form.dataVencimento} onChange={(v:any)=>setForm({...form, dataVencimento: v})} required={true} />
+                                 </div>
+                              )}
+                          </div>
+                          )}
 
-            {activeTab === 'pendencias' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-                {pendencias.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Nenhuma cobrança ativa</p></div>}
-                {pendencias.map(r => (
-                <div key={r.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-red-500/20 shadow-lg flex flex-col justify-between group relative overflow-hidden transition-all hover:border-red-500/40 hover:-translate-y-1">
-                    <div className="absolute -top-4 -right-4 p-6 text-red-500/5 group-hover:text-red-500/10 transition-colors"><AlertCircle size={80}/></div>
-                    <div className="relative z-10">
-                        <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-6">
-                        <h4 className="text-2xl text-white italic font-black uppercase truncate pr-4 tracking-tighter">{formatClientName(r)}</h4>
-                        <span className="bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-black tracking-widest shadow-md whitespace-nowrap flex-shrink-0 ml-2">FALTA R$ {formatMoney(Number(r.valor) - Number(r.valorRecebido))}</span>
-                        </div>
-                        <div className="space-y-2 mb-8 text-[11px] font-black uppercase text-zinc-500 tracking-widest">
-                        <p>AGENTE: <span className="text-zinc-100 ml-2">{r.nome}</span></p>
-                        <p>PRODUTO: <span className="text-zinc-100 ml-2 truncate inline-block max-w-[150px] align-bottom">{formatItemName(r)}</span></p>
-                        <p className="mt-4 pt-2">VENCIMENTO: <span className="text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-md border border-yellow-400/20">{r.dataVencimento?.split('-').reverse().join('/') || 'A COMBINAR'}</span></p>
-                        </div>
-                    </div>
-                    <button onClick={() => setModalParcela(r)} className="w-full bg-green-500 text-black font-black py-4 rounded-xl uppercase text-[11px] tracking-widest hover:bg-green-400 shadow-md relative z-10 transition-all active:scale-95">RECEBER PAGAMENTO</button>
-                </div>
-                ))}
-            </div>
-            )}
+                          {form.tipo === 'CORRIDINHA' && <div className="animate-in slide-in-from-top-4 duration-300"><InputField label="VALOR DO BÔNUS (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="Ex: 50,00" /></div>}
+                          
+                          {/* TEXTO CORRIGIDO DO PAGAMENTO */}
+                          {form.tipo === 'SAQUE' && <div className="animate-in slide-in-from-top-4 duration-300"><InputField label="CASHBACK PAGO AO AGENTE (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="Ex: 150,00" /></div>}
 
-            {activeTab === 'admin' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-                {aguardando.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Fila limpa</p></div>}
-                {aguardando.map(r => (
-                <div key={r.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-yellow-400/20 shadow-lg flex flex-col justify-between">
-                    <div>
-                        <h4 className="text-2xl text-white italic font-black uppercase mb-2 truncate tracking-tighter">{r.nome}</h4>
-                        <p className="text-yellow-400 text-[10px] font-black uppercase mb-6 tracking-[0.2em] bg-yellow-400/10 inline-block px-3 py-1.5 rounded-lg">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</p>
-                        <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
-                            <p>CLIENTE: <span className="text-zinc-300 truncate inline-block max-w-[150px] align-bottom">{formatClientName(r)}</span></p>
-                            <p className="truncate">ITEM: <span className="text-zinc-300">{formatItemName(r)}</span></p>
-                        </div>
-                    </div>
-                    <div className="flex gap-3">
-                        <button onClick={() => decidir(r.id, 'APROVAR')} className="flex-1 bg-yellow-400 text-black font-black py-3.5 rounded-xl uppercase text-[10px] hover:bg-yellow-300 shadow-md transition-all">APROVAR</button>
-                        <button onClick={() => decidir(r.id, 'REPROVAR')} className="px-5 py-3.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl hover:bg-red-500 hover:text-white transition-all"><X size={18}/></button>
-                    </div>
-                </div>
-                ))}
-            </div>
-            )}
+                          <button disabled={loading} className={`w-full bg-yellow-400 text-black font-black py-5 rounded-2xl uppercase tracking-[0.3em] text-sm shadow-lg mt-8 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-yellow-300 active:scale-95'}`}>
+                          {loading ? 'PROCESSANDO...' : 'ENVIAR REGISTRO'}
+                          </button>
+                      </form>
+                  </div>
+                  )}
 
-            {activeTab === 'admin_zone' && (
-            <div className="space-y-10 animate-in fade-in duration-500">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="bg-red-500/5 border border-red-500/20 p-10 rounded-[2.5rem] shadow-lg relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-8 text-red-500/5"><Archive size={80}/></div>
-                    <h3 className="text-3xl font-black italic text-white mb-4 tracking-tighter">VIRADA DE MÊS</h3>
-                    <p className="text-zinc-500 mb-8 text-xs font-bold uppercase tracking-widest leading-relaxed">Arquiva as vendas e zera contadores. USE APENAS NO DIA 1º.</p>
-                    <button onClick={virarMes} disabled={loading} className="w-full bg-red-600 text-white font-black py-4 rounded-xl uppercase text-xs shadow-md hover:bg-red-500 transition-all active:scale-95">EXECUTAR VIRADA</button>
-                    </div>
+                  {activeTab === 'pendencias' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
+                      {pendencias.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Nenhuma cobrança ativa</p></div>}
+                      {pendencias.map(r => (
+                      <div key={r.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-red-500/20 shadow-lg flex flex-col justify-between group relative overflow-hidden transition-all hover:border-red-500/40 hover:-translate-y-1">
+                          <div className="absolute -top-4 -right-4 p-6 text-red-500/5 group-hover:text-red-500/10 transition-colors"><AlertCircle size={80}/></div>
+                          <div className="relative z-10">
+                              <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-6">
+                              <h4 className="text-2xl text-white italic font-black uppercase truncate pr-4 tracking-tighter">{formatClientName(r)}</h4>
+                              <span className="bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-black tracking-widest shadow-md whitespace-nowrap flex-shrink-0 ml-2">FALTA R$ {formatMoney(Number(r.valor) - Number(r.valorRecebido))}</span>
+                              </div>
+                              <div className="space-y-2 mb-8 text-[11px] font-black uppercase text-zinc-500 tracking-widest">
+                              <p>AGENTE: <span className="text-zinc-100 ml-2">{r.nome}</span></p>
+                              <p>PRODUTO: <span className="text-zinc-100 ml-2 truncate inline-block max-w-[150px] align-bottom">{formatItemName(r)}</span></p>
+                              <p className="mt-4 pt-2">VENCIMENTO: <span className="text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-md border border-yellow-400/20">{r.dataVencimento?.split('-').reverse().join('/') || 'A COMBINAR'}</span></p>
+                              </div>
+                          </div>
+                          <button onClick={() => setModalParcela(r)} className="w-full bg-green-500 text-black font-black py-4 rounded-xl uppercase text-[11px] tracking-widest hover:bg-green-400 shadow-md relative z-10 transition-all active:scale-95">RECEBER PAGAMENTO</button>
+                      </div>
+                      ))}
+                  </div>
+                  )}
 
-                    <div className="bg-purple-500/5 border border-purple-500/20 p-10 rounded-[2.5rem] shadow-lg relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-8 text-purple-500/5"><Database size={80}/></div>
-                    <h3 className="text-3xl font-black italic text-white mb-4 tracking-tighter">RESTAURAR SISTEMA</h3>
-                    <p className="text-zinc-500 mb-8 text-xs font-bold uppercase tracking-widest leading-relaxed">Desfaz erro da virada precoce. Volta as vendas para o Painel.</p>
-                    <button onClick={forcarAuditoria} disabled={loading} className="w-full bg-purple-600 text-white font-black py-4 rounded-xl uppercase text-xs shadow-md hover:bg-purple-500 transition-all active:scale-95">RESTAURAR VENDAS</button>
-                    </div>
-                </div>
-                
-                <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-xl">
-                    <div className="p-6 px-8 border-b border-white/5 flex justify-between items-center">
-                        <h4 className="font-black italic text-zinc-500 uppercase tracking-[0.3em] text-[11px]">LOGS DE DADOS</h4>
-                    </div>
-                    <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
-                    <thead className="bg-white/5 text-zinc-600 border-b border-white/5">
-                        <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5 text-right">AÇÃO</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {registros.filter(r => r.status === 'APROVADO').slice(0, 50).map((r: any) => (
-                        <tr key={r.id} className="hover:bg-white/[0.01] transition-colors">
-                            <td className="px-8 py-5 text-white text-xs">{r.nome}</td>
-                            <td className="px-8 py-5">
-                                <span className="text-zinc-500 border border-white/5 px-3 py-1.5 rounded-lg text-[9px]">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</span>
-                            </td>
-                            <td className="px-8 py-5 text-right">
-                                <button onClick={() => deletarLog(r.id)} className="text-red-500/40 hover:text-red-500 p-2.5 bg-red-500/5 rounded-lg transition-all"><Trash2 size={16}/></button>
-                            </td>
-                        </tr>
-                        ))}
-                    </tbody>
-                    </table>
-                </div>
-            </div>
-            )}
+                  {activeTab === 'admin' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
+                      {aguardando.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Fila limpa</p></div>}
+                      {aguardando.map(r => (
+                      <div key={r.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-yellow-400/20 shadow-lg flex flex-col justify-between">
+                          <div>
+                              <h4 className="text-2xl text-white italic font-black uppercase mb-2 truncate tracking-tighter">{r.nome}</h4>
+                              <p className="text-yellow-400 text-[10px] font-black uppercase mb-6 tracking-[0.2em] bg-yellow-400/10 inline-block px-3 py-1.5 rounded-lg">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</p>
+                              <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
+                                  <p>CLIENTE: <span className="text-zinc-300 truncate inline-block max-w-[150px] align-bottom">{formatClientName(r)}</span></p>
+                                  <p className="truncate">ITEM: <span className="text-zinc-300">{formatItemName(r)}</span></p>
+                              </div>
+                          </div>
+                          <div className="flex gap-3">
+                              <button disabled={loading} onClick={() => decidir(r.id, 'APROVAR')} className={`flex-1 bg-yellow-400 text-black font-black py-3.5 rounded-xl uppercase text-[10px] shadow-md transition-all ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-yellow-300'}`}>APROVAR</button>
+                              <button disabled={loading} onClick={() => decidir(r.id, 'REPROVAR')} className={`px-5 py-3.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl transition-all ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-500 hover:text-white'}`}><X size={18}/></button>
+                          </div>
+                      </div>
+                      ))}
+                  </div>
+                  )}
 
-            {activeTab === 'historico_backup' && (
-            <div className="space-y-8 animate-in fade-in duration-500">
-                <div className="flex flex-col md:flex-row md:items-center gap-6 bg-[#0a0a0a] p-8 rounded-[2.5rem] border border-white/5 shadow-lg">
-                    <div className="flex-1">
-                        <p className="text-[11px] font-black uppercase text-zinc-500 mb-3 tracking-[0.3em] italic">PERÍODO</p>
-                        <select value={mesBackup} onChange={(e) => setMesBackup(e.target.value)} className="w-full bg-black border border-white/10 text-yellow-400 p-4 rounded-xl outline-none font-black uppercase text-sm cursor-pointer shadow-inner appearance-none">
-                            <option value="">Selecione...</option>
-                            {mesesDisponiveis.map(m => <option key={m} value={m}>{formatMes(m)}</option>)}
-                        </select>
-                    </div>
-                    <div className="flex-1 flex gap-5">
-                        <div className="flex-1 bg-black p-6 rounded-[1.5rem] border border-white/5 shadow-inner">
-                            <p className="text-[10px] text-zinc-600 font-black mb-2 uppercase tracking-widest italic">BRUTO</p>
-                            <p className="text-2xl font-mono text-white italic font-black">R$ {formatMoney(backupBruto)}</p>
-                        </div>
-                        <div className="flex-1 bg-black p-6 rounded-[1.5rem] border border-green-500/10 shadow-inner">
-                            <p className="text-[10px] text-green-500/70 font-black mb-2 uppercase tracking-widest italic">CAIXA</p>
-                            <p className="text-2xl font-mono text-green-400 italic font-black">R$ {formatMoney(backupLiquido)}</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-lg">
-                    <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
-                    <thead className="bg-white/5 text-zinc-600 border-b border-white/5">
-                        <tr><th className="px-8 py-5">AGENTE</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5">VALOR</th><th className="px-8 py-5 text-right">DIA</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {registrosDoMesBackup.map((r: any) => (
-                        <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
-                            <td className="px-8 py-5 text-white text-xs italic group-hover:text-yellow-400 transition-colors">{r.nome}</td>
-                            <td className="px-8 py-5 text-zinc-500 text-[10px] italic">{r.tipo}</td>
-                            <td className={`px-8 py-5 font-mono text-sm ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
-                            <td className="px-8 py-5 text-zinc-600 text-[10px] font-mono text-right">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
-                        </tr>
-                        ))}
-                    </tbody>
-                    </table>
-                </div>
-            </div>
+                  {activeTab === 'admin_zone' && (
+                  <div className="space-y-10 animate-in fade-in duration-500">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div className="bg-red-500/5 border border-red-500/20 p-10 rounded-[2.5rem] shadow-lg relative overflow-hidden group">
+                          <div className="absolute top-0 right-0 p-8 text-red-500/5"><Archive size={80}/></div>
+                          <h3 className="text-3xl font-black italic text-white mb-4 tracking-tighter">VIRADA DE MÊS</h3>
+                          <p className="text-zinc-500 mb-8 text-xs font-bold uppercase tracking-widest leading-relaxed">Arquiva as vendas e zera contadores. USE APENAS NO DIA 1º.</p>
+                          <button onClick={virarMes} disabled={loading} className={`w-full bg-red-600 text-white font-black py-4 rounded-xl uppercase text-xs shadow-md transition-all ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-500 active:scale-95'}`}>EXECUTAR VIRADA</button>
+                          </div>
+
+                          <div className="bg-purple-500/5 border border-purple-500/20 p-10 rounded-[2.5rem] shadow-lg relative overflow-hidden group">
+                          <div className="absolute top-0 right-0 p-8 text-purple-500/5"><Database size={80}/></div>
+                          <h3 className="text-3xl font-black italic text-white mb-4 tracking-tighter">RESTAURAR SISTEMA</h3>
+                          <p className="text-zinc-500 mb-8 text-xs font-bold uppercase tracking-widest leading-relaxed">Desfaz erro da virada precoce. Volta as vendas para o Painel.</p>
+                          <button onClick={forcarAuditoria} disabled={loading} className={`w-full bg-purple-600 text-white font-black py-4 rounded-xl uppercase text-xs shadow-md transition-all ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-500 active:scale-95'}`}>RESTAURAR VENDAS</button>
+                          </div>
+                      </div>
+                      
+                      <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-xl">
+                          <div className="p-6 px-8 border-b border-white/5 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                              <h4 className="font-black italic text-zinc-500 uppercase tracking-[0.3em] text-[11px]">LOGS DE DADOS</h4>
+                              
+                              <div className="flex relative group w-full md:w-80">
+                                 <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-zinc-500 group-focus-within:text-yellow-400 transition-colors"><Search size={14} /></div>
+                                 <input type="text" value={termoLogs} onChange={(e) => { setTermoLogs(e.target.value); setLimiteLogs(20); }} placeholder="BUSCAR REGISTRO..." className="w-full bg-black border border-white/5 p-3 pl-10 rounded-xl text-white outline-none focus:border-yellow-400/50 font-black text-[9px] tracking-[0.2em] uppercase transition-all shadow-inner placeholder:text-zinc-700" />
+                              </div>
+                          </div>
+                          <div className="overflow-x-auto">
+                              <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
+                              <thead className="bg-white/5 text-zinc-600 border-b border-white/5">
+                                  <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5 text-right">AÇÃO</th></tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5">
+                                  {logsFiltrados.slice(0, limiteLogs).map((r: any) => (
+                                  <tr key={r.id} className="hover:bg-white/[0.01] transition-colors">
+                                      <td className="px-8 py-5 text-white text-xs">{r.nome}</td>
+                                      <td className="px-8 py-5">
+                                          <span className="text-zinc-500 border border-white/5 px-3 py-1.5 rounded-lg text-[9px]">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</span>
+                                      </td>
+                                      <td className="px-8 py-5 text-right">
+                                          <button onClick={() => deletarLog(r.id)} className="text-red-500/40 hover:text-red-500 p-2.5 bg-red-500/5 rounded-lg transition-all"><Trash2 size={16}/></button>
+                                      </td>
+                                  </tr>
+                                  ))}
+                              </tbody>
+                              </table>
+                              {logsFiltrados.length > limiteLogs && (
+                                <div className="p-4 border-t border-white/5 flex justify-center bg-black/20">
+                                    <button onClick={() => setLimiteLogs(prev => prev + 20)} className="flex items-center gap-2 text-[10px] text-zinc-500 hover:text-yellow-400 font-black uppercase tracking-[0.3em] px-6 py-3 rounded-xl hover:bg-white/5 transition-all">CARREGAR MAIS <ChevronDown size={14} /></button>
+                                </div>
+                              )}
+                              {logsFiltrados.length === 0 && <div className="p-10 text-center text-zinc-600 font-black text-xs uppercase tracking-[0.3em] italic">NENHUM LOG ENCONTRADO.</div>}
+                          </div>
+                      </div>
+                  </div>
+                  )}
+
+                  {activeTab === 'historico_backup' && (
+                  <div className="space-y-8 animate-in fade-in duration-500">
+                      <div className="flex flex-col md:flex-row md:items-center gap-6 bg-[#0a0a0a] p-8 rounded-[2.5rem] border border-white/5 shadow-lg">
+                          <div className="flex-1">
+                              <p className="text-[11px] font-black uppercase text-zinc-500 mb-3 tracking-[0.3em] italic">PERÍODO</p>
+                              <select value={mesBackup} onChange={(e) => setMesBackup(e.target.value)} className="w-full bg-black border border-white/10 text-yellow-400 p-4 rounded-xl outline-none font-black uppercase text-sm cursor-pointer shadow-inner appearance-none">
+                                  <option value="">Selecione...</option>
+                                  {mesesDisponiveis.map(m => <option key={m} value={m}>{formatMes(m)}</option>)}
+                              </select>
+                          </div>
+                          <div className="flex-1 flex gap-5">
+                              <div className="flex-1 bg-black p-6 rounded-[1.5rem] border border-white/5 shadow-inner">
+                                  <p className="text-[10px] text-zinc-600 font-black mb-2 uppercase tracking-widest italic">BRUTO</p>
+                                  <p className="text-2xl font-mono text-white italic font-black">R$ {formatMoney(backupBruto)}</p>
+                              </div>
+                              <div className="flex-1 bg-black p-6 rounded-[1.5rem] border border-green-500/10 shadow-inner">
+                                  <p className="text-[10px] text-green-500/70 font-black mb-2 uppercase tracking-widest italic">CAIXA</p>
+                                  <p className="text-2xl font-mono text-green-400 italic font-black">R$ {formatMoney(backupLiquido)}</p>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-lg">
+                          <div className="p-6 border-b border-white/5">
+                             <div className="flex relative group w-full md:w-96">
+                                <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none text-zinc-500 group-focus-within:text-yellow-400 transition-colors"><Search size={16} /></div>
+                                <input type="text" value={termoHistorico} onChange={(e) => { setTermoHistorico(e.target.value); setLimiteHistorico(20); }} placeholder="PESQUISAR NO HISTÓRICO..." className="w-full bg-black border border-white/5 p-4 pl-12 rounded-xl text-white outline-none focus:border-yellow-400/50 font-black text-[10px] tracking-[0.2em] uppercase transition-all shadow-inner placeholder:text-zinc-700" />
+                             </div>
+                          </div>
+                          
+                          <div className="overflow-x-auto">
+                              <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
+                              <thead className="bg-white/5 text-zinc-600 border-b border-white/5">
+                                  <tr><th className="px-8 py-5">AGENTE</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5">VALOR</th><th className="px-8 py-5 text-right">DIA</th></tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5">
+                                  {historicoFiltrado.slice(0, limiteHistorico).map((r: any) => (
+                                  <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
+                                      <td className="px-8 py-5 text-white text-xs italic group-hover:text-yellow-400 transition-colors">{r.nome}</td>
+                                      <td className="px-8 py-5 text-zinc-500 text-[10px] italic">{r.tipo}</td>
+                                      <td className={`px-8 py-5 font-mono text-sm ${r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatMoney(r.valor || r.cashbackExtra)}</td>
+                                      <td className="px-8 py-5 text-zinc-600 text-[10px] font-mono text-right">{new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
+                                  </tr>
+                                  ))}
+                              </tbody>
+                              </table>
+                              
+                              {historicoFiltrado.length > limiteHistorico && (
+                                <div className="p-4 border-t border-white/5 flex justify-center bg-black/20">
+                                    <button onClick={() => setLimiteHistorico(prev => prev + 20)} className="flex items-center gap-2 text-[10px] text-zinc-500 hover:text-yellow-400 font-black uppercase tracking-[0.3em] px-6 py-3 rounded-xl hover:bg-white/5 transition-all">CARREGAR MAIS <ChevronDown size={14} /></button>
+                                </div>
+                              )}
+                              {historicoFiltrado.length === 0 && <div className="p-10 text-center text-zinc-600 font-black text-xs uppercase tracking-[0.3em] italic">NENHUM REGISTRO ENCONTRADO.</div>}
+                          </div>
+                      </div>
+                  </div>
+                  )}
+               </>
             )}
         </div>
 
@@ -541,19 +687,18 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
               DESENVOLVIDO POR <span className="text-yellow-400">{'</>'} VZ</span>
            </p>
         </footer>
-
       </main>
 
+      {/* MODAL DETALHADO DO MEMBRO */}
       {membroSelecionado && modalMember && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-6 sm:p-10 animate-in fade-in backdrop-blur-sm duration-300">
            <div className="bg-[#050505] border border-white/10 w-full max-w-5xl rounded-[3rem] flex flex-col max-h-[90vh] overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.8)]">
-              
               <div className="p-10 lg:p-12 border-b border-white/5 flex justify-between items-start bg-gradient-to-br from-yellow-400/[0.03] to-transparent relative">
                  <button onClick={() => setMembroSelecionado(null)} className="absolute top-8 right-8 text-zinc-600 hover:text-yellow-400 bg-black p-3.5 rounded-full border border-white/5 transition-all hover:scale-110 active:scale-90"><X size={24}/></button>
                  <div className="flex items-center gap-8 w-full pr-20">
                     <img src={modalMember.avatar || `https://ui-avatars.com/api/?name=${modalMember.nome}&background=EAB308&color=000&bold=true`} className="w-28 h-28 lg:w-32 lg:h-32 rounded-[2rem] border-2 border-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.2)]" alt="" />
                     <div className="flex-1 min-w-0">
-                       <h2 className="text-4xl lg:text-5xl font-black uppercase italic tracking-tighter text-white leading-none truncate mb-4">{modalMember.nome}</h2>
+                       <h2 className="text-4xl lg:text-5xl font-black uppercase italic tracking-tighter text-white leading-none truncate mb-4" title={modalMember.nome}>{modalMember.nome}</h2>
                        <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-[10px] bg-yellow-400/10 inline-block px-5 py-2 rounded-xl border border-yellow-400/20">{modalMember.cargoReal}</p>
                     </div>
                  </div>
@@ -615,6 +760,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </div>
       )}
 
+      {/* MODAL RECEBER PARCELA */}
       {modalParcela && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 p-6 animate-in zoom-in-95 duration-300">
            <div className="bg-[#0a0a0a] border border-zinc-800 p-12 rounded-[3rem] w-full max-w-xl shadow-2xl relative">
@@ -634,7 +780,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                     </div>
                  )}
                  
-                 <button disabled={loading} className="w-full bg-green-500 text-black font-black py-6 rounded-[1.5rem] uppercase tracking-[0.3em] text-xs hover:bg-green-400 shadow-xl transition-all active:scale-95 mt-4">
+                 <button disabled={loading} className={`w-full bg-green-500 text-black font-black py-6 rounded-[1.5rem] uppercase tracking-[0.3em] text-xs shadow-xl transition-all mt-4 ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-400 active:scale-95'}`}>
                     {loading ? 'SINCRONIZANDO...' : 'CONFIRMAR RECEBIMENTO'}
                  </button>
               </form>
@@ -642,6 +788,16 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </div>
       )}
 
+    </div>
+  );
+}
+
+// COMPONENTES AUXILIARES
+function SkeletonCard() {
+  return (
+    <div className="p-8 lg:p-10 rounded-[2.5rem] bg-[#0a0a0a] border border-white/5 animate-pulse relative overflow-hidden flex flex-col justify-center h-40 shadow-lg">
+       <div className="h-3 w-24 bg-white/5 rounded-full mb-6"></div>
+       <div className="h-10 w-48 bg-white/5 rounded-full"></div>
     </div>
   );
 }
