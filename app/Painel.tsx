@@ -18,13 +18,6 @@ const formatMes = (yyyyMM: string) => {
   return `${mesesNome[parseInt(m) - 1]} ${y}`;
 };
 
-const extractFirstName = (fullName: string) => {
-   if (!fullName) return '';
-   const parts = fullName.split('|');
-   const cleanName = parts[parts.length - 1].trim();
-   return cleanName.split(' ')[0].toUpperCase();
-};
-
 const formatItemName = (r: any) => {
   if (r.tipo === 'CORRIDINHA' && (!r.item || r.item === 'N/A')) return 'BÔNUS: CORRIDINHA MALUCA';
   if (r.tipo === 'SAQUE' && (!r.item || r.item === 'N/A')) return 'PAGAMENTO REALIZADO';
@@ -380,7 +373,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                                           style={{ height: `${alturaAjustada}%` }}
                                        ></div>
                                     </div>
-                                    <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 truncate w-full text-center mt-3 px-1 group-hover:text-white transition-colors" title={m.nome}>{extractFirstName(m.nome)}</div>
+                                    <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 truncate w-full text-center mt-3 px-1 group-hover:text-white transition-colors" title={m.nome}>{(m.nome)}</div>
                                  </div>
                               )
                            })}
