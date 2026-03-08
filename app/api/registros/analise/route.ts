@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { registroId, acao } = body;
+    const { registroId, acao, avaliadoPor } = body; // Puxando o nome do Admin
 
     if (!registroId || !acao) {
       return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
@@ -25,7 +25,8 @@ export async function POST(req: Request) {
     if (acao === 'REPROVAR') {
       await prisma.registro.update({
         where: { id: registroId },
-        data: { status: 'REPROVADO' }
+        // 👇 Registrando quem reprovou
+        data: { status: 'REPROVADO', avaliadoPor: avaliadoPor || 'Admin' }
       });
       return NextResponse.json({ success: true, message: "Reprovado com sucesso" });
     }
@@ -34,7 +35,8 @@ export async function POST(req: Request) {
     if (acao === 'APROVAR') {
       await prisma.registro.update({
         where: { id: registroId },
-        data: { status: 'APROVADO' }
+        // 👇 Registrando quem aprovou
+        data: { status: 'APROVADO', avaliadoPor: avaliadoPor || 'Admin' }
       });
 
       const valNum = Number(registro.valor) || 0;
@@ -50,7 +52,7 @@ export async function POST(req: Request) {
               vendas: { increment: valNum },
               valorRecebido: { increment: recNum },
               cashbackExtra: { increment: extra },
-              nome: registro.nome || undefined // Atualiza o nome se mudou
+              nome: registro.nome || undefined 
             },
             create: {
               discordId: registro.discordId,

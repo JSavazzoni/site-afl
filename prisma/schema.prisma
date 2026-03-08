@@ -37,5 +37,8 @@ model Registro {
   recrutadoId        String?
   quantidade         Int?
   status             String   @default("PENDENTE")
+  criadoPor          String?  // Nome de quem preencheu e enviou a venda
+  avaliadoPor        String?  // Nome do Admin que aprovou ou reprovou
+  
   criado_em          DateTime @default(now())
 }

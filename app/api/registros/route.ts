@@ -30,7 +30,8 @@ export async function POST(req: Request) {
         valorRecebido: Number(body.recebidoNumerico) || 0,
         cashbackExtra: Number(body.cashbackExtra) || 0,
         status: 'PENDENTE',
-        dataVencimento: body.dataVencimento || null
+        dataVencimento: body.dataVencimento || null,
+        criadoPor: body.criadoPor || 'Sistema',
       }
     });
     return NextResponse.json(novo);

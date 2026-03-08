@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, Trophy, PlusCircle, ShieldCheck, TrendingUp, Users, 
   LogOut, UsersRound, X, History, CheckCircle2, Database, Clock, 
-  ShoppingCart, Zap, Banknote, AlertCircle, Trash2, ShieldAlert, Archive, Search, ChevronDown
+  ShoppingCart, Zap, Banknote, AlertCircle, Trash2, ShieldAlert, Archive, Search, ChevronDown, AlertTriangle
 } from 'lucide-react';
 import { signOut } from "next-auth/react";
 
@@ -17,6 +17,13 @@ const formatMes = (yyyyMM: string) => {
   return `${mesesNome[parseInt(m) - 1]} ${y}`;
 };
 
+const extractFirstName = (fullName: string) => {
+   if (!fullName) return '';
+   const parts = fullName.split('|');
+   const cleanName = parts[parts.length - 1].trim();
+   return cleanName.split(' ')[0].toUpperCase();
+};
+
 export default function Painel({ initialIsAdmin, userSession }: any) {
   const [activeTab, setActiveTab] = useState('inicio');
   const [selectedCargo, setSelectedCargo] = useState('Todos');
@@ -27,18 +34,26 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
   
-  // ESTADOS DE BUSCA E PAGINAÇÃO (20 em 20)
+  // ESTADOS DE BUSCA E PAGINAÇÃO
   const [termoMural, setTermoMural] = useState('');
   const [limiteMural, setLimiteMural] = useState(20);
-  
   const [termoLogs, setTermoLogs] = useState('');
   const [limiteLogs, setLimiteLogs] = useState(20);
-
   const [termoHistorico, setTermoHistorico] = useState('');
   const [limiteHistorico, setLimiteHistorico] = useState(20);
   
   const [membroSelecionado, setMembroSelecionado] = useState<any>(null);
   const [modalParcela, setModalParcela] = useState<any>(null);
+  
+  // NOVO ESTADO: O MODAL DE CONFIRMAÇÃO BONITO
+  const [modalConfirmacao, setModalConfirmacao] = useState<{
+    aberto: boolean;
+    titulo: string;
+    mensagem: string;
+    acao: () => void;
+    tipo?: 'perigo' | 'aviso';
+  } | null>(null);
+
   const [valorParcela, setValorParcela] = useState('');
   const [proximoVencimento, setProximoVencimento] = useState('');
   const [mesBackup, setMesBackup] = useState('');
@@ -133,7 +148,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
       return String(a.dataVencimento).localeCompare(String(b.dataVencimento));
     });
   
-  // MURAL FILTRADO E PAGINADO
   const muralMesFiltrado = registros.filter(r => 
     (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
     r.criado_em && r.criado_em.startsWith(mesAtualStr) &&
@@ -147,7 +161,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
            (r.nome && r.nome.toLowerCase().includes(busca));
   }).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
 
-  // LOGS FILTRADOS E PAGINADOS
   const logsFiltrados = registros.filter(r => r.status === 'APROVADO').filter(r => {
     if (termoLogs === '') return true;
     const busca = termoLogs.toLowerCase();
@@ -156,7 +169,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
            (r.tipo || '').toLowerCase().includes(busca);
   }).sort((a,b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
 
-  // HISTÓRICO FILTRADO E PAGINADO
   const mesesDisponiveis = Array.from(new Set(registros.map(r => r.criado_em?.substring(0, 7)))).filter(Boolean).sort().reverse();
   const registrosDoMesBackup = registros.filter(r => r.criado_em?.startsWith(mesBackup));
   
@@ -173,7 +185,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
 
   const maxBrutoGrafico = Math.max(...equipeProcessada.map(m => m.bruto), 1);
 
-  // LÓGICA DO FORMULÁRIO CONDICIONAL
   const valTotalForm = parseFloat(form.valor.replace(',', '.')) || 0;
   const valRecebidoForm = form.valorRecebido !== '' ? parseFloat(form.valorRecebido.replace(',', '.')) : valTotalForm;
   const mostrarDataVencimento = valRecebidoForm < valTotalForm; 
@@ -191,7 +202,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
       valorNumerico: form.tipo === 'CORRIDINHA' ? 0 : valTotalForm,
       recebidoNumerico: form.tipo === 'CORRIDINHA' ? 0 : valRecebidoForm,
       cashbackExtra: form.tipo === 'CORRIDINHA' ? valTotalForm : 0,
-      vendedorNome: m?.nome 
+      vendedorNome: m?.nome,
+      criadoPor: userSession?.user?.name || "Desconhecido" 
     };
 
     const res = await fetch('/api/registros', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -206,33 +218,70 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   const decidir = async (id: string, acao: 'APROVAR' | 'REPROVAR') => {
     if (loading) return;
     setLoading(true);
-    await fetch('/api/registros/analise', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registroId: id, acao }) });
+    await fetch('/api/registros/analise', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ 
+            registroId: id, 
+            acao, 
+            avaliadoPor: userSession?.user?.name || "Desconhecido" 
+        }) 
+    });
     pulse(); 
     setLoading(false);
   };
 
-  const deletarLog = async (id: string) => {
-    if (!confirm("ATENÇÃO: Deletar permanentemente?")) return;
-    await fetch('/api/admin/logs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-    pulse();
+  // 👇 NOVA LÓGICA DE DELETAR COM O MODAL BONITO 👇
+  const deletarLog = (id: string) => {
+    setModalConfirmacao({
+      aberto: true,
+      titulo: 'EXCLUIR REGISTRO',
+      mensagem: 'Tem certeza que deseja deletar este log permanentemente? Essa ação não pode ser desfeita.',
+      tipo: 'perigo',
+      acao: async () => {
+        setLoading(true);
+        await fetch('/api/admin/logs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+        pulse();
+        setModalConfirmacao(null);
+        setLoading(false);
+      }
+    });
   };
 
-  const virarMes = async () => {
-    if (!confirm("ALERTA: Isso irá arquivar o mês. Apenas use no 1º dia do mês.")) return;
-    setLoading(true);
-    await fetch('/api/admin/virada', { method: 'POST' });
-    showToast("MÊS FECHADO!");
-    pulse();
-    setLoading(false);
+  // 👇 NOVA LÓGICA DE VIRADA DE MÊS COM O MODAL BONITO 👇
+  const virarMes = () => {
+    setModalConfirmacao({
+      aberto: true,
+      titulo: 'VIRADA DE MÊS',
+      mensagem: 'ALERTA MÁXIMO: Isso irá arquivar o mês atual e zerar todos os contadores da equipe. Tem certeza que deseja prosseguir?',
+      tipo: 'perigo',
+      acao: async () => {
+        setLoading(true);
+        await fetch('/api/admin/virada', { method: 'POST' });
+        showToast("MÊS FECHADO!");
+        pulse();
+        setModalConfirmacao(null);
+        setLoading(false);
+      }
+    });
   };
 
-  const forcarAuditoria = async () => {
-    if (!confirm("RESTAURAR SISTEMA: Recalcular banco e voltar vendas?")) return;
-    setLoading(true);
-    await fetch('/api/admin/auditoria');
-    showToast("SISTEMA RESTAURADO!");
-    pulse();
-    setLoading(false);
+  // 👇 NOVA LÓGICA DE RESTAURAR COM O MODAL BONITO 👇
+  const forcarAuditoria = () => {
+    setModalConfirmacao({
+      aberto: true,
+      titulo: 'RESTAURAR SISTEMA',
+      mensagem: 'Tem certeza que deseja recalcular o banco de dados e voltar as vendas arquivadas para o Painel Principal?',
+      tipo: 'aviso',
+      acao: async () => {
+        setLoading(true);
+        await fetch('/api/admin/auditoria');
+        showToast("SISTEMA RESTAURADO!");
+        pulse();
+        setModalConfirmacao(null);
+        setLoading(false);
+      }
+    });
   };
 
   const handlePagarParcela = async (e: any) => {
@@ -341,25 +390,19 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                            <Trophy className="text-yellow-400/20" size={32}/>
                         </div>
                         
-                        {/* GRÁFICO CORRIGIDO (h-64 para ter altura, e colunas com h-full) */}
                         <div className="flex items-end gap-2 lg:gap-6 h-64 mt-8 pt-4">
                            {equipeProcessada.slice(0, 5).map((m, i) => {
                               const alturaPercent = m.bruto > 0 ? (m.bruto / maxBrutoGrafico) * 100 : 0;
-                              // Garante no mínimo 5% de altura se o agente vendeu algo, para não ficar zerado visualmente
                               const alturaAjustada = m.bruto > 0 ? Math.max(5, alturaPercent) : 0; 
                               return (
                                  <div key={m.discordId} className="flex-1 flex flex-col justify-end items-center group h-full">
                                     <div className="text-[10px] lg:text-xs font-mono font-black italic text-zinc-600 group-hover:text-yellow-400 transition-colors mb-3">R$ {formatMoney(m.bruto)}</div>
-                                    
-                                    {/* CONTAINER DA BARRA */}
                                     <div className="w-full max-w-[80px] bg-white/[0.02] rounded-t-2xl border border-white/5 border-b-0 relative flex-1 flex flex-col justify-end overflow-hidden group-hover:border-yellow-400/20 transition-all">
                                        <div 
                                           className="w-full bg-gradient-to-t from-yellow-600 to-yellow-400 rounded-t-xl transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(250,204,21,0.2)] group-hover:brightness-110" 
                                           style={{ height: `${alturaAjustada}%` }}
                                        ></div>
                                     </div>
-                                    
-                                    {/* NOME COMPLETO COM TRUNCATE PARA NÃO BUGAR A TELA */}
                                     <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 truncate w-full text-center mt-3 px-1 group-hover:text-white transition-colors" title={m.nome}>{m.nome}</div>
                                  </div>
                               )
@@ -505,8 +548,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                           )}
 
                           {form.tipo === 'CORRIDINHA' && <div className="animate-in slide-in-from-top-4 duration-300"><InputField label="VALOR DO BÔNUS (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="Ex: 50,00" /></div>}
-                          
-                          {/* TEXTO CORRIGIDO DO PAGAMENTO */}
                           {form.tipo === 'SAQUE' && <div className="animate-in slide-in-from-top-4 duration-300"><InputField label="CASHBACK PAGO AO AGENTE (R$)" type="number" value={form.valor} onChange={(v:any)=>setForm({...form, valor: v})} placeholder="Ex: 150,00" /></div>}
 
                           <button disabled={loading} className={`w-full bg-yellow-400 text-black font-black py-5 rounded-2xl uppercase tracking-[0.3em] text-sm shadow-lg mt-8 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-yellow-300 active:scale-95'}`}>
@@ -550,6 +591,10 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                               <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
                                   <p>CLIENTE: <span className="text-zinc-300 truncate inline-block max-w-[150px] align-bottom">{formatClientName(r)}</span></p>
                                   <p className="truncate">ITEM: <span className="text-zinc-300">{formatItemName(r)}</span></p>
+                                  
+                                  {r.criadoPor && (
+                                     <p className="pt-2 mt-2 border-t border-white/5 text-zinc-400 italic">POSTADO POR: <span className="text-white ml-1">{r.criadoPor}</span></p>
+                                  )}
                               </div>
                           </div>
                           <div className="flex gap-3">
@@ -591,7 +636,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                           <div className="overflow-x-auto">
                               <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
                               <thead className="bg-white/5 text-zinc-600 border-b border-white/5">
-                                  <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5 text-right">AÇÃO</th></tr>
+                                  <tr><th className="px-8 py-5">MEMBRO</th><th className="px-8 py-5">TIPO</th><th className="px-8 py-5 text-yellow-400">AUTORIA DA AÇÃO</th><th className="px-8 py-5 text-right">AÇÃO</th></tr>
                               </thead>
                               <tbody className="divide-y divide-white/5">
                                   {logsFiltrados.slice(0, limiteLogs).map((r: any) => (
@@ -600,6 +645,14 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                                       <td className="px-8 py-5">
                                           <span className="text-zinc-500 border border-white/5 px-3 py-1.5 rounded-lg text-[9px]">{r.tipo} • R$ {formatMoney(r.valor || r.cashbackExtra)}</span>
                                       </td>
+                                      
+                                      <td className="px-8 py-5">
+                                          <div className="flex flex-col gap-1.5">
+                                             <span className="text-[9px] text-zinc-400 italic">📝 Postou: {r.criadoPor || 'Sistema'}</span>
+                                             <span className="text-[9px] text-yellow-400/80 italic">🛡️ Aprovou: {r.avaliadoPor || 'N/A'}</span>
+                                          </div>
+                                      </td>
+
                                       <td className="px-8 py-5 text-right">
                                           <button onClick={() => deletarLog(r.id)} className="text-red-500/40 hover:text-red-500 p-2.5 bg-red-500/5 rounded-lg transition-all"><Trash2 size={16}/></button>
                                       </td>
@@ -786,6 +839,36 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
               </form>
            </div>
         </div>
+      )}
+
+      {/* NOVO MODAL DE CONFIRMAÇÃO (Substitui o window.confirm feio do navegador) */}
+      {modalConfirmacao && modalConfirmacao.aberto && (
+         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-6 animate-in fade-in backdrop-blur-sm duration-300">
+            <div className={`bg-[#0a0a0a] border ${modalConfirmacao.tipo === 'perigo' ? 'border-red-500/30' : 'border-purple-500/30'} p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl relative text-center flex flex-col items-center animate-in zoom-in-95`}>
+               <div className={`p-5 rounded-full mb-6 ${modalConfirmacao.tipo === 'perigo' ? 'bg-red-500/10 text-red-500' : 'bg-purple-500/10 text-purple-500'}`}>
+                  <AlertTriangle size={48} />
+               </div>
+               <h3 className="text-2xl font-black italic text-white uppercase tracking-tighter mb-3">{modalConfirmacao.titulo}</h3>
+               <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest leading-relaxed mb-8">{modalConfirmacao.mensagem}</p>
+               
+               <div className="flex gap-4 w-full">
+                  <button 
+                     onClick={() => setModalConfirmacao(null)} 
+                     disabled={loading}
+                     className="flex-1 bg-white/5 hover:bg-white/10 text-white font-black py-4 rounded-xl uppercase tracking-widest text-[10px] transition-all"
+                  >
+                     CANCELAR
+                  </button>
+                  <button 
+                     onClick={modalConfirmacao.acao} 
+                     disabled={loading}
+                     className={`flex-1 font-black py-4 rounded-xl uppercase tracking-widest text-[10px] shadow-lg transition-all ${loading ? 'opacity-50 cursor-not-allowed' : modalConfirmacao.tipo === 'perigo' ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-purple-600 text-white hover:bg-purple-500'}`}
+                  >
+                     {loading ? 'AGUARDE...' : 'CONFIRMAR'}
+                  </button>
+               </div>
+            </div>
+         </div>
       )}
 
     </div>
