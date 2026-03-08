@@ -116,7 +116,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   
   const aguardando = registros.filter(r => r.status === 'PENDENTE');
   
-  // 👇 A MÁGICA DA ORDENAÇÃO ACONTECE AQUI 👇
   const pendencias = registros
     .filter(r => (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.tipo === 'VENDA' || !r.tipo) && Number(r.valorRecebido) < Number(r.valor))
     .sort((a, b) => {
@@ -124,8 +123,9 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
       if (!a.dataVencimento) return 1;
       // Se a cobrança B não tiver data, vai pro final
       if (!b.dataVencimento) return -1;
-      // Ordena cronologicamente: menor data (mais antiga/próxima a vencer) para maior data
-      return new Date(a.dataVencimento).getTime() - new Date(b.dataVencimento).getTime();
+      
+      // Compara direto o texto YYYY-MM-DD (À prova de bugs de fuso horário)
+      return String(a.dataVencimento).localeCompare(String(b.dataVencimento));
     });
   
   const muralMes = registros.filter(r => 
