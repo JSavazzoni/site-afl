@@ -40,7 +40,6 @@ const formatClientName = (r: any) => {
 const isParcela = (item: string) => (item || '').toUpperCase().includes('PAGAMENTO DE PARCELA');
 const extractVal = (r: any) => Number(r.valor) || Number(r.valorRecebido) || Number(r.cashbackExtra) || 0;
 
-// NOVO: Fetcher ultra-rápido do SWR
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 export default function Painel({ initialIsAdmin, userSession }: any) {
@@ -50,7 +49,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   
-  // ESTADOS DE BUSCA E PAGINAÇÃO
   const [termoMural, setTermoMural] = useState('');
   const [limiteMural, setLimiteMural] = useState(20);
   const [termoLogs, setTermoLogs] = useState('');
@@ -72,16 +70,13 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   const dataAtual = new Date();
   const mesAtualStr = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}`;
 
-  // 👇 O SWR MÁGICO SUBSTITUI O SETINTERVAL 👇
-  // Ele cria cache automático, pausa a busca se você for pra outra aba e atualiza sozinho!
   const { data: equipeData, mutate: mutateEquipe } = useSWR('/api/equipe', fetcher, { refreshInterval: 5000 });
   const { data: registrosData, mutate: mutateRegistros } = useSWR('/api/registros', fetcher, { refreshInterval: 5000 });
 
   const equipe = equipeData || [];
   const registros = registrosData || [];
-  const isInitialLoad = !equipeData || !registrosData; // Esqueleto ligado até o SWR puxar os dados
+  const isInitialLoad = !equipeData || !registrosData;
 
-  // Sincroniza a força bruta caso os dados sejam alterados manualmente pelo admin
   const forcarAtualizacao = () => { mutateEquipe(); mutateRegistros(); };
 
   useEffect(() => {
@@ -91,9 +86,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     }
   }, [registros, mesBackup]);
 
-  // 👇 MEMÓRIA MATEMÁTICA (useMemo) 👇
-  // A partir daqui, NENHUMA conta é refeita quando você digita nas barras de pesquisa!
-  
   const equipeProcessada = useMemo(() => {
     const getCashback = (cargo: string) => { 
         const r: any = { 'Resp.Vendas': 0.15, 'Master AFL': 0.12, 'Resp.AFL': 0.10, 'Auxiliar AFL': 0.09, 'Lider AFL': 0.08, 'Sub-Lider AFL': 0.07, 'Membro AFL': 0.06 };
@@ -125,7 +117,8 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
     }).sort((a: any, b: any) => b.bruto - a.bruto);
   }, [equipe, registros, mesAtualStr]);
 
-  const equipeFiltrada = useMemo(() => selectedCargo === 'Todos' ? equipeProcessada : equipeProcessada.filter(m => m.cargoReal === selectedCargo), [equipeProcessada, selectedCargo]);
+  // AJUSTE: Tipagem explícita (m: any) para evitar erro no Build da Vercel
+  const equipeFiltrada = useMemo(() => selectedCargo === 'Todos' ? equipeProcessada : equipeProcessada.filter((m: any) => m.cargoReal === selectedCargo), [equipeProcessada, selectedCargo]);
   
   const aguardando = useMemo(() => registros.filter((r: any) => r.status === 'PENDENTE'), [registros]);
   
@@ -172,11 +165,10 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
   const backupBruto = useMemo(() => registrosDoMesBackup.filter((r: any) => (r.tipo === 'VENDA' || !r.tipo) && !isParcela(r.item)).reduce((a: any,r: any) => a + (Number(r.valor) || 0), 0), [registrosDoMesBackup]);
   const backupLiquido = useMemo(() => registrosDoMesBackup.filter((r: any) => r.tipo === 'VENDA' || !r.tipo).reduce((a: any,r: any) => a + (isParcela(r.item) ? extractVal(r) : (Number(r.valorRecebido) || 0)), 0), [registrosDoMesBackup]);
 
-  const maxBrutoGrafico = useMemo(() => Math.max(...equipeProcessada.map(m => m.bruto), 1), [equipeProcessada]);
+  const maxBrutoGrafico = useMemo(() => Math.max(...equipeProcessada.map((m: any) => m.bruto), 1), [equipeProcessada]);
 
-  const modalMember = useMemo(() => membroSelecionado ? equipeProcessada.find(m => m.discordId === membroSelecionado.discordId) || membroSelecionado : null, [membroSelecionado, equipeProcessada]);
+  const modalMember = useMemo(() => membroSelecionado ? equipeProcessada.find((m: any) => m.discordId === membroSelecionado.discordId) || membroSelecionado : null, [membroSelecionado, equipeProcessada]);
 
-  // Lógica Formulário
   const valTotalForm = parseFloat(form.valor.replace(',', '.')) || 0;
   const valRecebidoForm = form.valorRecebido !== '' ? parseFloat(form.valorRecebido.replace(',', '.')) : valTotalForm;
   const mostrarDataVencimento = valRecebidoForm < valTotalForm; 
@@ -405,7 +397,7 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                           <tr><th className="px-8 py-5">RANK</th><th className="px-8 py-5 text-center">AGENTE</th><th className="px-8 py-5 text-right">PRODUÇÃO (MÊS)</th></tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                          {equipeProcessada.map((m:any, i:any) => (
+                          {equipeProcessada.map((m:any, i:number) => (
                           <tr key={m.discordId} className="hover:bg-white/[0.02] transition-all group">
                               <td className="px-8 py-6 italic text-3xl text-zinc-700 group-hover:text-yellow-400/30 transition-colors w-24">{i + 1}º</td>
                               <td className="px-8 py-6 flex items-center justify-center gap-4 text-lg text-white italic tracking-tight"><img src={m.avatar || `https://ui-avatars.com/api/?name=${m.nome}&background=EAB308&color=000&bold=true`} className="w-10 h-10 rounded-xl" alt=""/> {m.nome}</td>
@@ -491,7 +483,9 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
                                     </button>
                                 </div>
                               )}
-                              {muralMesFiltrado.length === 0 && <div className="p-12 text-center text-zinc-600 font-black text-xs uppercase tracking-[0.3em] italic">NENHUM RESULTADO ENCONTRADO.</div>}
+                              {muralMesFiltrado.length === 0 && (
+                                <div className="p-12 text-center text-zinc-600 font-black text-xs uppercase tracking-[0.3em] italic">NENHUM RESULTADO ENCONTRADO.</div>
+                              )}
                           </div>
                       </div>
                   </div>
@@ -720,7 +714,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </footer>
       </main>
 
-      {/* MODAL DETALHADO DO MEMBRO */}
       {membroSelecionado && modalMember && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-6 sm:p-10 animate-in fade-in backdrop-blur-sm duration-300">
            <div className="bg-[#050505] border border-white/10 w-full max-w-5xl rounded-[3rem] flex flex-col max-h-[90vh] overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.8)]">
@@ -791,7 +784,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </div>
       )}
 
-      {/* MODAL RECEBER PARCELA */}
       {modalParcela && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 p-6 animate-in zoom-in-95 duration-300">
            <div className="bg-[#0a0a0a] border border-zinc-800 p-12 rounded-[3rem] w-full max-w-xl shadow-2xl relative">
@@ -819,7 +811,6 @@ export default function Painel({ initialIsAdmin, userSession }: any) {
         </div>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO PADRÃO */}
       {modalConfirmacao && modalConfirmacao.aberto && (
          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-6 animate-in fade-in backdrop-blur-sm duration-300">
             <div className={`bg-[#0a0a0a] border ${modalConfirmacao.tipo === 'perigo' ? 'border-red-500/30' : 'border-purple-500/30'} p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl relative text-center flex flex-col items-center animate-in zoom-in-95`}>
