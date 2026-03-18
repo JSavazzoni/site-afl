@@ -12,7 +12,8 @@ export async function GET() {
       orderBy: { createdAt: 'asc' }
     });
 
-    const payload = records.map(record => {
+    // Colocamos o (record: any) aqui para o TypeScript parar de bloquear a leitura do banco antigo
+    const payload = records.map((record: any) => {
       const type = record.type ?? record.tipo ?? 'VENDA';
       const isBonus = type === 'CORRIDINHA';
       const isWithdrawal = type === 'SAQUE';
