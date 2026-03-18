@@ -53,13 +53,12 @@ const getCashbackPercentage = (role: string) => {
   return rates[role || 'Membro AFL'] || 0.06;
 };
 
-// Caixinha arrumada para não bugar o topo nem aumentar o tamanho da linha
 const TooltipText = ({ text, maxWidth = "150px" }: { text: string, maxWidth?: string }) => (
-  <div className="group relative flex items-center">
-    <span className="truncate cursor-pointer" style={{ maxWidth }} title={text}>
+  <div className="group relative inline-block align-bottom max-w-full">
+    <span className="truncate block cursor-pointer" style={{ maxWidth }} title={text}>
       {text}
     </span>
-    <div className="opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 absolute left-4 top-full mt-1 w-max max-w-[240px] bg-[#111] text-yellow-400 text-[10px] font-black px-4 py-3 rounded-xl border border-yellow-400/30 shadow-[0_15px_30px_rgba(0,0,0,0.9)] z-[9999] whitespace-normal leading-relaxed uppercase tracking-widest text-left pointer-events-none">
+    <div className="opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 absolute left-4 top-full mt-2 w-max max-w-[260px] bg-[#111] text-yellow-400 text-[10px] font-black px-4 py-3 rounded-xl border border-yellow-400/30 shadow-[0_20px_50px_rgba(0,0,0,1)] z-[99999] whitespace-normal leading-relaxed uppercase tracking-widest text-left pointer-events-none">
       {text}
     </div>
   </div>
@@ -103,9 +102,10 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
   const { data: teamData, mutate: mutateTeam } = useSWR('/api/equipe', fetcher, { refreshInterval: 5000 });
   const { data: recordsData, mutate: mutateRecords } = useSWR('/api/records', fetcher, { refreshInterval: 5000 });
 
-  const teamMembers = teamData || [];
-  const records = recordsData || [];
-  const isInitialLoad = !teamData || !recordsData;
+  // BLINDAGEM: Garante que mesmo se a API der erro, a tela recebe uma lista limpa e não quebra com o "map is not a function"
+  const teamMembers = Array.isArray(teamData) ? teamData : [];
+  const records = Array.isArray(recordsData) ? recordsData : [];
+  const isInitialLoad = (!teamData && !recordsData);
 
   const forceDataSync = useCallback(async () => { 
     await Promise.all([mutateTeam(), mutateRecords()]);
@@ -754,8 +754,11 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
                              </div>
                              <div className="space-y-2 mb-8 text-[11px] font-black uppercase text-zinc-500 tracking-widest">
                                <p>AGENTE: <span className="text-zinc-100 ml-2">{record.name || record.nome}</span></p>
-                               <div className="flex w-[150px]">
-                                  PRODUTO: <span className="text-zinc-100 ml-2"><TooltipText text={getDisplayItemName(record)} /></span>
+                               <div className="flex w-full items-center">
+                                  <span className="mr-2 shrink-0">PRODUTO:</span> 
+                                  <div className="text-zinc-100 min-w-0 flex-1">
+                                    <TooltipText text={getDisplayItemName(record)} maxWidth="100%" />
+                                  </div>
                                </div>
                                <p className="mt-4 pt-2">VENCIMENTO: <span className="text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-md border border-yellow-400/20">{record.dueDate?.split('-').reverse().join('/') || record.dataVencimento?.split('-').reverse().join('/') || 'A COMBINAR'}</span></p>
                              </div>
@@ -775,13 +778,13 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
                              <h4 className="text-2xl text-white italic font-black uppercase mb-2 truncate tracking-tighter">{record.name || record.nome}</h4>
                              <p className="text-yellow-400 text-[10px] font-black uppercase mb-6 tracking-[0.2em] bg-yellow-400/10 inline-block px-3 py-1.5 rounded-lg">{record.type || record.tipo} • R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record) || getPaidValue(record))}</p>
                              <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
-                               <div className="flex w-full">
-                                 <span className="mr-1">CLIENTE:</span> 
-                                 <span className="text-zinc-300 flex-1 min-w-0"><TooltipText text={getDisplayClientName(record)} maxWidth="150px" /></span>
+                               <div className="flex items-center w-full">
+                                 <span className="mr-2 shrink-0">CLIENTE:</span> 
+                                 <span className="text-zinc-300 min-w-0 flex-1"><TooltipText text={getDisplayClientName(record)} maxWidth="100%" /></span>
                                </div>
-                               <div className="flex w-full">
-                                 <span className="mr-1">ITEM:</span> 
-                                 <span className="text-zinc-300 flex-1 min-w-0"><TooltipText text={getDisplayItemName(record)} maxWidth="150px" /></span>
+                               <div className="flex items-center w-full">
+                                 <span className="mr-2 shrink-0">ITEM:</span> 
+                                 <span className="text-zinc-300 min-w-0 flex-1"><TooltipText text={getDisplayItemName(record)} maxWidth="100%" /></span>
                                </div>
                                {record.createdBy && <p className="pt-2 mt-2 border-t border-white/5 text-zinc-400 italic">POSTADO POR: <span className="text-white ml-1">{record.createdBy || record.criadoPor}</span></p>}
                              </div>
