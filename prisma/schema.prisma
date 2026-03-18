@@ -7,38 +7,43 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Membro {
+model Member {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
   discordId     String   @unique
-  nome          String
-  cargo         String   @default("Membro AFL")
-  vendas        Float    @default(0)
-  valorRecebido Float    @default(0) 
-  recrutamentos Int      @default(0)
-  cashbackExtra Float    @default(0)
-  cashbackPago  Float    @default(0) // NOVO: O que já foi transferido pra ele
-  atualizado_em DateTime @updatedAt
+  name          String   @map("nome")
+  role          String   @default("Membro AFL") @map("cargo")
+  panelRole     String?  @map("cargoPainel")
+  avatar        String?  @map("avatar")
+  sales         Float    @default(0) @map("vendas")
+  receivedValue Float    @default(0) @map("valorRecebido")
+  recruitments  Int      @default(0) @map("recrutamentos")
+  extraCashback Float    @default(0) @map("cashbackExtra")
+  paidCashback  Float    @default(0) @map("cashbackPago")
+  updatedAt     DateTime @updatedAt @map("atualizado_em")
+
+  @@map("Membro")
 }
 
-model Registro {
-  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
-  nome               String
-  discordId          String
-  tipo               String   // VENDA, RECRUTAMENTO ou SAQUE
-  cliente            String?
-  cpfEmail           String?
-  item               String?
-  valorPagamento     String?
-  idDiscordAvancado  String?
-  valor              Float?   
-  valorRecebido      Float?   
-  cashbackExtra      Float?
-  dataVencimento     String?   
-  recrutadoId        String?
-  quantidade         Int?
-  status             String   @default("PENDENTE")
-  criadoPor          String?  // Nome de quem preencheu e enviou a venda
-  avaliadoPor        String?  // Nome do Admin que aprovou ou reprovou
-  
-  criado_em          DateTime @default(now())
+model Record {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  name              String   @map("nome")
+  discordId         String
+  type              String   @map("tipo")
+  client            String?  @map("cliente")
+  document          String?  @map("cpfEmail")
+  item              String?
+  paymentMethod     String?  @map("valorPagamento")
+  advancedDiscordId String?  @map("idDiscordAvancado")
+  amount            Float?   @map("valor")
+  receivedAmount    Float?   @map("valorRecebido")
+  extraCashback     Float?   @map("cashbackExtra")
+  dueDate           String?  @map("dataVencimento")
+  recruitedId       String?  @map("recrutadoId")
+  quantity          Int?     @map("quantidade")
+  status            String   @default("PENDENTE")
+  createdBy         String?  @map("criadoPor")
+  evaluatedBy       String?  @map("avaliadoPor")
+  createdAt         DateTime @default(now()) @map("criado_em")
+
+  @@map("Registro")
 }

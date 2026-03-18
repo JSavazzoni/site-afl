@@ -5,10 +5,9 @@ export const dynamic = 'force-dynamic';
 
 const adminService = new AdminService();
 
-export async function DELETE(req: Request) {
+export async function GET() {
   try {
-    const { id } = await req.json();
-    await adminService.deleteLog(id);
+    await adminService.runSystemAudit();
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

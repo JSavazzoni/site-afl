@@ -1,70 +1,113 @@
-export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 
-const prisma = new PrismaClient();
+export const dynamic = 'force-dynamic';
 
-const hierarchy = [
-  { id: process.env.ROLE_RESP_VENDAS, name: 'Resp.Vendas' },
-  { id: process.env.ROLE_MASTER, name: 'Master AFL' },
-  { id: process.env.ROLE_RESP_AFL, name: 'Resp.AFL' },
-  { id: process.env.ROLE_AUXILIAR, name: 'Auxiliar AFL' },
-  { id: process.env.ROLE_LIDER, name: 'Lider AFL' },
-  { id: process.env.ROLE_SUB_LIDER, name: 'Sub-Lider AFL' },
-  { id: process.env.ROLE_MEMBRO, name: 'Membro AFL' }
-];
+const getHighestRole = (discordRoles: string[]) => {
+  if (discordRoles.includes(process.env.ROLE_RESP_VENDAS || '')) return "Resp.Vendas";
+  if (discordRoles.includes(process.env.ROLE_MASTER || '')) return "Master AFL";
+  if (discordRoles.includes(process.env.ROLE_RESP_AFL || '')) return "Resp.AFL";
+  if (discordRoles.includes(process.env.ROLE_AUXILIAR || '')) return "Auxiliar AFL";
+  if (discordRoles.includes(process.env.ROLE_LIDER || '')) return "Lider AFL";
+  if (discordRoles.includes(process.env.ROLE_SUB_LIDER || '')) return "Sub-Lider AFL";
+  if (discordRoles.includes(process.env.ROLE_MEMBRO || '')) return "Membro AFL";
+  return null;
+};
 
 export async function GET() {
   try {
-    const discordRes = await fetch(`https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members?limit=1000`, {
-      headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` },
-      cache: 'no-store' 
-    });
-
-    if (!discordRes.ok) return NextResponse.json({ error: "Erro na API do Discord" }, { status: 500 });
+    let members = await prisma.member.findMany();
     
-    const discordMembers = await discordRes.json();
-    const dbMembers = await prisma.membro.findMany();
-    const equipeFormatada = [];
+    const botToken = process.env.DISCORD_BOT_TOKEN;
+    const guildId = process.env.DISCORD_GUILD_ID;
 
-    // Pegamos o ID de Admin da sua variável de ambiente
-    const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID;
+    if (botToken && guildId) {
+      const membersRes = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`, {
+        headers: { Authorization: `Bot ${botToken}` },
+        cache: 'no-store'
+      });
 
-    for (const member of discordMembers) {
-      if (member.user?.bot) continue;
-
-      let cargoPainel = null;
-      for (const roleDef of hierarchy) {
-        if (roleDef.id && member.roles.includes(roleDef.id)) {
-          cargoPainel = roleDef.name;
-          break; 
-        }
-      }
-
-      // SÓ ENTRA NO SITE SE TIVER UM CARGO DA HIERARQUIA
-      if (cargoPainel) {
-        const dbData = dbMembers.find((db: any) => String(db.discordId) === String(member.user.id));
+      if (membersRes.ok) {
+        const discordMembers = await membersRes.json();
         
-        // VERIFICAÇÃO DE ADMIN AO VIVO
-        const ehAdmin = (adminRoleId && member.roles.includes(adminRoleId)) || cargoPainel === 'Master AFL';
+        for (let i = 0; i < members.length; i++) {
+          const dbMember = members[i];
+          const dMember = discordMembers.find((dm: any) => dm.user.id === dbMember.discordId);
 
-        equipeFormatada.push({
-          discordId: String(member.user.id),
-          nome: member.nick || member.user.global_name || member.user.username,
-          avatar: member.user.avatar ? `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png',
-          cargoPainel: cargoPainel,
-          // AQUI ESTÁ O CARIMBO QUE O SITE VAI LER:
-          isAdminRealTime: ehAdmin, 
-          vendas: dbData ? Number(dbData.vendas) : 0,
-          valorRecebido: dbData ? Number(dbData.valorRecebido) : 0, 
-          cashbackExtra: dbData ? Number(dbData.cashbackExtra) : 0,
-          cashbackPago: dbData ? Number(dbData.cashbackPago) : 0
-        });
+          let updated = false;
+          let updateData: any = {};
+
+          if (dMember) {
+            const newName = dMember.nick || dMember.user.global_name || dMember.user.username;
+            const newAvatar = dMember.user.avatar 
+              ? `https://cdn.discordapp.com/avatars/${dMember.user.id}/${dMember.user.avatar}.png?size=256` 
+              : null;
+
+            if (dbMember.name !== newName || dbMember.avatar !== newAvatar) {
+              updateData.name = newName;
+              updateData.avatar = newAvatar;
+              updated = true;
+              members[i].name = newName;
+              members[i].avatar = newAvatar;
+            }
+
+            const highestRole = getHighestRole(dMember.roles);
+
+            if (highestRole) {
+              if (dbMember.role !== highestRole || dbMember.panelRole !== highestRole) {
+                updateData.role = highestRole;
+                updateData.panelRole = highestRole;
+                updated = true;
+                members[i].role = highestRole;
+                members[i].panelRole = highestRole;
+              }
+            } else {
+              const cargoReal = dbMember.panelRole || dbMember.role || "";
+              if (!cargoReal.includes("Ex-Membro")) {
+                updateData.role = "Ex-Membro";
+                updateData.panelRole = "Ex-Membro";
+                updated = true;
+                members[i].role = "Ex-Membro";
+                members[i].panelRole = "Ex-Membro";
+              }
+            }
+          } else {
+            const cargoReal = dbMember.panelRole || dbMember.role || "";
+            if (!cargoReal.includes("Ex-Membro")) {
+              updateData.role = "Ex-Membro";
+              updateData.panelRole = "Ex-Membro";
+              updated = true;
+              members[i].role = "Ex-Membro";
+              members[i].panelRole = "Ex-Membro";
+            }
+          }
+
+          if (updated) {
+            await prisma.member.update({
+              where: { discordId: dbMember.discordId },
+              data: updateData
+            });
+          }
+        }
       }
     }
 
-    return NextResponse.json(equipeFormatada);
-  } catch (error) {
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    return NextResponse.json(members);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const result = await prisma.member.upsert({
+      where: { discordId: body.discordId },
+      update: { ...body },
+      create: { ...body }
+    });
+    return NextResponse.json(result);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
