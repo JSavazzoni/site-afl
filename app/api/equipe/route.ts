@@ -3,96 +3,106 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
-const getHighestRole = (discordRoles: string[]) => {
-  if (discordRoles.includes(process.env.ROLE_RESP_VENDAS || '')) return "Resp.Vendas";
-  if (discordRoles.includes(process.env.ROLE_MASTER || '')) return "Master AFL";
-  if (discordRoles.includes(process.env.ROLE_RESP_AFL || '')) return "Resp.AFL";
-  if (discordRoles.includes(process.env.ROLE_AUXILIAR || '')) return "Auxiliar AFL";
-  if (discordRoles.includes(process.env.ROLE_LIDER || '')) return "Lider AFL";
-  if (discordRoles.includes(process.env.ROLE_SUB_LIDER || '')) return "Sub-Lider AFL";
-  if (discordRoles.includes(process.env.ROLE_MEMBRO || '')) return "Membro AFL";
+const resolveHighestRole = (discordRoles: string[]) => {
+  const hierarchy = [
+    { id: process.env.ROLE_RESP_VENDAS, name: "Resp.Vendas" },
+    { id: process.env.ROLE_MASTER, name: "Master AFL" },
+    { id: process.env.ROLE_RESP_AFL, name: "Resp.AFL" },
+    { id: process.env.ROLE_AUXILIAR, name: "Auxiliar AFL" },
+    { id: process.env.ROLE_LIDER, name: "Lider AFL" },
+    { id: process.env.ROLE_SUB_LIDER, name: "Sub-Lider AFL" },
+    { id: process.env.ROLE_MEMBRO, name: "Membro AFL" }
+  ];
+
+  for (const role of hierarchy) {
+    if (role.id && discordRoles.includes(role.id)) {
+      return role.name;
+    }
+  }
+  
   return null;
 };
 
 export async function GET() {
   try {
     const members = await prisma.member.findMany();
-    const botToken = process.env.DISCORD_BOT_TOKEN;
-    const guildId = process.env.DISCORD_GUILD_ID;
+    const token = process.env.DISCORD_BOT_TOKEN;
+    const guild = process.env.DISCORD_GUILD_ID;
 
-    if (!botToken || !guildId) {
+    if (!token || !guild) {
       return NextResponse.json(members);
     }
 
-    const membersRes = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`, {
-      headers: { Authorization: `Bot ${botToken}` },
+    const request = await fetch(`https://discord.com/api/v10/guilds/${guild}/members?limit=1000`, {
+      headers: { Authorization: `Bot ${token}` },
       cache: 'no-store'
     });
 
-    if (!membersRes.ok) {
+    if (!request.ok) {
       return NextResponse.json(members);
     }
 
-    const discordMembers = await membersRes.json();
-    
-    for (const dbMember of members) {
-      const dMember = discordMembers.find((dm: any) => dm.user.id === dbMember.discordId);
-      let updated = false;
-      const updateData: any = {};
+    const discordMembers = await request.json();
 
-      if (dMember) {
-        const newName = dMember.nick || dMember.user.global_name || dMember.user.username;
-        const newAvatar = dMember.user.avatar 
-          ? `https://cdn.discordapp.com/avatars/${dMember.user.id}/${dMember.user.avatar}.png?size=256` 
+    for (const member of members) {
+      const remoteMember = discordMembers.find((dm: any) => dm.user.id === member.discordId);
+      let requiresUpdate = false;
+      const payload: any = {};
+
+      if (remoteMember) {
+        const resolvedName = remoteMember.nick || remoteMember.user.global_name || remoteMember.user.username;
+        const resolvedAvatar = remoteMember.user.avatar 
+          ? `https://cdn.discordapp.com/avatars/${remoteMember.user.id}/${remoteMember.user.avatar}.png?size=256` 
           : null;
 
-        if (dbMember.name !== newName || dbMember.avatar !== newAvatar) {
-          updateData.name = newName;
-          updateData.avatar = newAvatar;
-          updated = true;
+        if (member.name !== resolvedName || member.avatar !== resolvedAvatar) {
+          payload.name = resolvedName;
+          payload.avatar = resolvedAvatar;
+          requiresUpdate = true;
 
-          if (dbMember.name !== newName) {
+          if (member.name !== resolvedName) {
             await prisma.record.updateMany({
-              where: { discordId: dbMember.discordId },
-              data: { name: newName }
+              where: { discordId: member.discordId },
+              data: { name: resolvedName }
             });
           }
         }
 
-        const highestRole = getHighestRole(dMember.roles);
+        const resolvedRole = resolveHighestRole(remoteMember.roles);
 
-        if (highestRole) {
-          if (dbMember.role !== highestRole || dbMember.panelRole !== highestRole) {
-            updateData.role = highestRole;
-            updateData.panelRole = highestRole;
-            updated = true;
+        if (resolvedRole) {
+          if (member.role !== resolvedRole || member.panelRole !== resolvedRole) {
+            payload.role = resolvedRole;
+            payload.panelRole = resolvedRole;
+            requiresUpdate = true;
           }
         } else {
-          const currentRole = dbMember.panelRole || dbMember.role || "";
-          if (!currentRole.includes("Ex-Membro")) {
-            updateData.role = "Ex-Membro";
-            updateData.panelRole = "Ex-Membro";
-            updated = true;
+          const fallbackRole = member.panelRole || member.role || "";
+          if (!fallbackRole.includes("Ex-Membro")) {
+            payload.role = "Ex-Membro";
+            payload.panelRole = "Ex-Membro";
+            requiresUpdate = true;
           }
         }
       } else {
-        const currentRole = dbMember.panelRole || dbMember.role || "";
-        if (!currentRole.includes("Ex-Membro")) {
-          updateData.role = "Ex-Membro";
-          updateData.panelRole = "Ex-Membro";
-          updated = true;
+        const fallbackRole = member.panelRole || member.role || "";
+        if (!fallbackRole.includes("Ex-Membro")) {
+          payload.role = "Ex-Membro";
+          payload.panelRole = "Ex-Membro";
+          requiresUpdate = true;
         }
       }
 
-      if (updated) {
+      if (requiresUpdate) {
         await prisma.member.update({
-          where: { discordId: dbMember.discordId },
-          data: updateData
+          where: { discordId: member.discordId },
+          data: payload
         });
       }
     }
 
-    return NextResponse.json(await prisma.member.findMany());
+    const updatedMembers = await prisma.member.findMany();
+    return NextResponse.json(updatedMembers);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -100,11 +110,11 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const payload = await req.json();
     const result = await prisma.member.upsert({
-      where: { discordId: body.discordId },
-      update: { ...body },
-      create: { ...body }
+      where: { discordId: payload.discordId },
+      update: { ...payload },
+      create: { ...payload }
     });
     return NextResponse.json(result);
   } catch (error: any) {
