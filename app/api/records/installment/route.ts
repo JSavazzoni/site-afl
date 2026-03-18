@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     });
 
     if (!originalRecord) {
-      throw new Error("Record not found");
+      throw new Error("Registro de venda não encontrado");
     }
 
     const newReceivedAmount = (originalRecord.receivedAmount || 0) + paidAmount;
@@ -29,14 +29,14 @@ export async function POST(req: Request) {
       data: {
         discordId: originalRecord.discordId,
         name: originalRecord.name,
-        type: "PARCELA",
+        type: "VENDA",
         item: `PAGAMENTO DE PARCELA: ${originalRecord.item || "N/A"}`,
         client: originalRecord.client,
         amount: paidAmount,
         receivedAmount: paidAmount,
         status: "APROVADO",
-        createdBy: "System",
-        evaluatedBy: "System"
+        createdBy: "Sistema",
+        evaluatedBy: "Sistema Automático"
       }
     });
 

@@ -53,14 +53,14 @@ const getCashbackPercentage = (role: string) => {
   return rates[role || 'Membro AFL'] || 0.06;
 };
 
+// Caixinha arrumada para não bugar o topo nem aumentar o tamanho da linha
 const TooltipText = ({ text, maxWidth = "150px" }: { text: string, maxWidth?: string }) => (
-  <div className="relative group flex items-center w-full">
-    <span className="truncate inline-block align-bottom cursor-pointer" style={{ maxWidth }}>
+  <div className="group relative flex items-center">
+    <span className="truncate cursor-pointer" style={{ maxWidth }} title={text}>
       {text}
     </span>
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-max max-w-xs bg-[#1a1a1a] text-yellow-400 text-[10px] font-black px-4 py-3 rounded-xl border border-yellow-400/20 shadow-[0_15px_40px_rgba(0,0,0,0.9)] z-[999] whitespace-normal leading-relaxed uppercase tracking-widest text-center pointer-events-none">
+    <div className="opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 absolute left-4 top-full mt-1 w-max max-w-[240px] bg-[#111] text-yellow-400 text-[10px] font-black px-4 py-3 rounded-xl border border-yellow-400/30 shadow-[0_15px_30px_rgba(0,0,0,0.9)] z-[9999] whitespace-normal leading-relaxed uppercase tracking-widest text-left pointer-events-none">
       {text}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1a1a1a]"></div>
     </div>
   </div>
 );
@@ -659,7 +659,7 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
                                      </span>
                                    </td>
                                    <td className="px-8 py-5 text-zinc-400 italic text-xs w-[250px]">
-                                     <TooltipText text={`${getDisplayClientName(record)} | ${getDisplayItemName(record)}`} />
+                                     <TooltipText text={`${getDisplayClientName(record)} | ${getDisplayItemName(record)}`} maxWidth="250px" />
                                    </td>
                                    <td className={`px-8 py-5 font-mono text-sm text-right whitespace-nowrap ${record.type === 'SAQUE' || record.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>
                                      {record.type === 'SAQUE' || record.tipo === 'SAQUE' ? '-' : '+'} R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record))}
@@ -775,8 +775,14 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
                              <h4 className="text-2xl text-white italic font-black uppercase mb-2 truncate tracking-tighter">{record.name || record.nome}</h4>
                              <p className="text-yellow-400 text-[10px] font-black uppercase mb-6 tracking-[0.2em] bg-yellow-400/10 inline-block px-3 py-1.5 rounded-lg">{record.type || record.tipo} • R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record) || getPaidValue(record))}</p>
                              <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
-                               <div className="flex w-[150px]">CLIENTE: <span className="text-zinc-300 ml-1"><TooltipText text={getDisplayClientName(record)} /></span></div>
-                               <div className="flex w-[150px]">ITEM: <span className="text-zinc-300 ml-1"><TooltipText text={getDisplayItemName(record)} /></span></div>
+                               <div className="flex w-full">
+                                 <span className="mr-1">CLIENTE:</span> 
+                                 <span className="text-zinc-300 flex-1 min-w-0"><TooltipText text={getDisplayClientName(record)} maxWidth="150px" /></span>
+                               </div>
+                               <div className="flex w-full">
+                                 <span className="mr-1">ITEM:</span> 
+                                 <span className="text-zinc-300 flex-1 min-w-0"><TooltipText text={getDisplayItemName(record)} maxWidth="150px" /></span>
+                               </div>
                                {record.createdBy && <p className="pt-2 mt-2 border-t border-white/5 text-zinc-400 italic">POSTADO POR: <span className="text-white ml-1">{record.createdBy || record.criadoPor}</span></p>}
                              </div>
                            </div>
@@ -980,12 +986,12 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
                  </div>
                  <div className="space-y-6">
                     <h3 className="text-xl font-black uppercase italic text-zinc-600 flex items-center gap-4 mb-8 tracking-[0.2em]"><History size={22} className="text-yellow-400"/> EXTRATO RECENTE</h3>
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 pb-10">
                         {records.filter((r:any) => String(r.discordId) === String(activeModalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.createdAt || r.criado_em)?.startsWith(currentMonthString)).map((r: any) => (
                           <div key={r.id} className="flex items-center bg-[#0a0a0a] p-6 rounded-[1.5rem] border border-white/5 hover:border-white/10 transition-all gap-4">
                              <div className="min-w-0 flex-1">
-                                <div className={`font-black text-sm uppercase italic mb-1 truncate max-w-[200px] lg:max-w-xs ${r.type === 'CORRIDINHA' || r.tipo === 'CORRIDINHA' ? 'text-blue-400' : r.type === 'SAQUE' || r.tipo === 'SAQUE' ? 'text-red-400' : 'text-white'}`}>
-                                  <TooltipText text={getDisplayItemName(r)} />
+                                <div className={`font-black text-sm uppercase italic mb-1 ${r.type === 'CORRIDINHA' || r.tipo === 'CORRIDINHA' ? 'text-blue-400' : r.type === 'SAQUE' || r.tipo === 'SAQUE' ? 'text-red-400' : 'text-white'}`}>
+                                  <TooltipText text={getDisplayItemName(r)} maxWidth="220px" />
                                 </div>
                                 <p className="text-[10px] text-zinc-600 tracking-widest uppercase mt-1 italic truncate">{new Date(r.createdAt || r.criado_em).toLocaleDateString('pt-BR')} • {getDisplayClientName(r)}</p>
                              </div>

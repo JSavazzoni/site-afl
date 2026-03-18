@@ -22,7 +22,6 @@ export const metadata: Metadata = {
     type: 'website',
   },
   icons: {
-    // Ícone redondo (Favicon) da aba do navegador
     icon: 'https://ui-avatars.com/api/?name=AFL&background=000&color=EAB308&bold=true&rounded=true',
   },
 };
