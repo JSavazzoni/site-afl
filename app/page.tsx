@@ -2,7 +2,6 @@ import { getServerSession } from "next-auth/next";
 import { redirect } from "next/navigation";
 import { authOptions } from "./api/auth/[...nextauth]/route";
 import Dashboard from "./Dashboard";
-import { prisma } from "@/lib/prisma";
 
 export const dynamic = 'force-dynamic';
 
@@ -13,23 +12,28 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const discordId = (session as any)?.user?.id;
+  // Pega os cargos do cara direto do Discord no momento do login
+  const userRoles = (session as any)?.user?.roles || [];
   
-  if (discordId) {
-    const dbUser = await prisma.member.findUnique({
-      where: { discordId }
-    });
-    
-    const activeRoles = ["Resp.Vendas", "Master AFL", "Resp.AFL", "Auxiliar AFL", "Lider AFL", "Sub-Lider AFL", "Membro AFL"];
-    const userRole = dbUser?.panelRole || dbUser?.role || "";
-    
-    if (!activeRoles.includes(userRole)) {
-      redirect("/login");
-    }
+  // IDs válidos mapeados no seu .env
+  const validRoles = [
+    process.env.ROLE_RESP_VENDAS,
+    process.env.ROLE_MASTER,
+    process.env.ROLE_RESP_AFL,
+    process.env.ROLE_AUXILIAR,
+    process.env.ROLE_LIDER,
+    process.env.ROLE_SUB_LIDER,
+    process.env.ROLE_MEMBRO
+  ].filter(Boolean); // Remove qualquer um que estiver vazio
+
+  // Verifica se o cara tem pelo menos um dos cargos válidos
+  const hasAccess = userRoles.some((role: string) => validRoles.includes(role));
+
+  if (!hasAccess) {
+    redirect("/access-denied");
   }
 
   const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID || "";
-  const userRoles = (session as any)?.user?.roles || [];
   const isAdmin = userRoles.includes(adminRoleId);
 
   return <Dashboard initialIsAdmin={isAdmin} userSession={session} />;
