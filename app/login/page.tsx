@@ -16,8 +16,9 @@ export default function Login() {
         <h1 className="text-4xl font-black uppercase italic tracking-tighter text-white mb-2">
           AFL<span className="text-yellow-400 ml-1">PAINEL</span>
         </h1>
+        
         <p className="text-zinc-500 text-[11px] font-black uppercase tracking-[0.3em] mb-12 italic">
-          Acesso restrito a membros oficiais
+          Acesso restrito a membros
         </p>
 
         <button 

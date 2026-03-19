@@ -44,63 +44,84 @@ export async function GET() {
 
     const discordMembers = await request.json();
 
-    for (const member of members) {
-      const remoteMember = discordMembers.find((dm: any) => dm.user.id === member.discordId);
-      let requiresUpdate = false;
-      const payload: any = {};
-
-      if (remoteMember) {
-        const resolvedName = remoteMember.nick || remoteMember.user.global_name || remoteMember.user.username;
-        const resolvedAvatar = remoteMember.user.avatar 
-          ? `https://cdn.discordapp.com/avatars/${remoteMember.user.id}/${remoteMember.user.avatar}.png?size=256` 
+    // 1. VARREDURA DE INSERÇÃO E ATUALIZAÇÃO (Lê o Discord inteiro)
+    for (const dMember of discordMembers) {
+      const resolvedRole = resolveHighestRole(dMember.roles);
+      
+      if (resolvedRole) {
+        const resolvedName = dMember.nick || dMember.user.global_name || dMember.user.username;
+        const resolvedAvatar = dMember.user.avatar 
+          ? `https://cdn.discordapp.com/avatars/${dMember.user.id}/${dMember.user.avatar}.png?size=256` 
           : null;
 
-        if (member.name !== resolvedName || member.avatar !== resolvedAvatar) {
-          payload.name = resolvedName;
-          payload.avatar = resolvedAvatar;
-          requiresUpdate = true;
+        const dbMember = members.find((m: any) => m.discordId === dMember.user.id);
 
-          if (member.name !== resolvedName) {
-            await prisma.record.updateMany({
-              where: { discordId: member.discordId },
-              data: { name: resolvedName }
-            });
+        if (dbMember) {
+          // Membro já existe: Verifica se algo mudou
+          let requiresUpdate = false;
+          const payload: any = {};
+
+          if (dbMember.name !== resolvedName || dbMember.avatar !== resolvedAvatar) {
+            payload.name = resolvedName;
+            payload.avatar = resolvedAvatar;
+            requiresUpdate = true;
+
+            // Se o nome mudou, altera nos registros antigos também
+            if (dbMember.name !== resolvedName) {
+              await prisma.record.updateMany({
+                where: { discordId: dbMember.discordId },
+                data: { name: resolvedName }
+              });
+            }
           }
-        }
 
-        const resolvedRole = resolveHighestRole(remoteMember.roles);
-
-        if (resolvedRole) {
-          if (member.role !== resolvedRole || member.panelRole !== resolvedRole) {
+          if (dbMember.role !== resolvedRole || dbMember.panelRole !== resolvedRole) {
             payload.role = resolvedRole;
             payload.panelRole = resolvedRole;
             requiresUpdate = true;
           }
-        } else {
-          const fallbackRole = member.panelRole || member.role || "";
-          if (!fallbackRole.includes("Ex-Membro")) {
-            payload.role = "Ex-Membro";
-            payload.panelRole = "Ex-Membro";
-            requiresUpdate = true;
-          }
-        }
-      } else {
-        const fallbackRole = member.panelRole || member.role || "";
-        if (!fallbackRole.includes("Ex-Membro")) {
-          payload.role = "Ex-Membro";
-          payload.panelRole = "Ex-Membro";
-          requiresUpdate = true;
-        }
-      }
 
-      if (requiresUpdate) {
-        await prisma.member.update({
-          where: { discordId: member.discordId },
-          data: payload
-        });
+          if (requiresUpdate) {
+            await prisma.member.update({
+              where: { discordId: dbMember.discordId },
+              data: payload
+            });
+          }
+        } else {
+          // MEMBRO NOVO: Cria imediatamente no banco de dados
+          await prisma.member.create({
+            data: {
+              discordId: dMember.user.id,
+              name: resolvedName,
+              avatar: resolvedAvatar,
+              role: resolvedRole,
+              panelRole: resolvedRole
+            }
+          });
+        }
       }
     }
 
+    // 2. VARREDURA DE REMOÇÃO (Lê o banco e chuta quem perdeu o cargo)
+    for (const dbMember of members) {
+      const dMember = discordMembers.find((dm: any) => dm.user.id === dbMember.discordId);
+      const resolvedRole = dMember ? resolveHighestRole(dMember.roles) : null;
+
+      if (!resolvedRole) {
+        const fallbackRole = dbMember.panelRole || dbMember.role || "";
+        if (!fallbackRole.includes("Ex-Membro")) {
+          await prisma.member.update({
+            where: { discordId: dbMember.discordId },
+            data: {
+              role: "Ex-Membro",
+              panelRole: "Ex-Membro"
+            }
+          });
+        }
+      }
+    }
+
+    // Retorna a lista atualizada
     const updatedMembers = await prisma.member.findMany();
     return NextResponse.json(updatedMembers);
   } catch (error: any) {
