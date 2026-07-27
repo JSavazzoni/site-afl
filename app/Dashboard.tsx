@@ -109,6 +109,21 @@ const TooltipText = ({ text, maxWidth = "150px" }: { text: string, maxWidth?: st
   </div>
 );
 
+const formatLocalDateInput = (date: Date) => {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+/** Data local daqui a 1 mês (ajusta fim de mês: 31/01 → 28/02 ou 29/02). */
+const getDatePlusOneMonth = (from: Date = new Date()) => {
+  const base = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const day = base.getDate();
+  base.setMonth(base.getMonth() + 1);
+  if (base.getDate() !== day) {
+    base.setDate(0);
+  }
+  return formatLocalDateInput(base);
+};
+
 export default function Dashboard({ initialPermissions, userSession }: any) {
   const [activeTab, setActiveTab] = useState('inicio');
   const [selectedRole, setSelectedRole] = useState('Todos');
@@ -309,6 +324,21 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const parsedTotalValue = parseFloat(formData.amount.replace(',', '.')) || 0;
   const parsedReceivedValue = formData.receivedAmount !== '' ? parseFloat(formData.receivedAmount.replace(',', '.')) : parsedTotalValue;
   const requireDueDate = parsedReceivedValue < parsedTotalValue;
+
+  useEffect(() => {
+    if (!requireDueDate) {
+      if (formData.dueDate) {
+        setFormData((current) => (current.dueDate ? { ...current, dueDate: '' } : current));
+      }
+      return;
+    }
+
+    if (!formData.dueDate) {
+      setFormData((current) => (
+        current.dueDate ? current : { ...current, dueDate: getDatePlusOneMonth() }
+      ));
+    }
+  }, [requireDueDate, formData.dueDate]);
 
   useEffect(() => {
     if (!canPostSales) return;
