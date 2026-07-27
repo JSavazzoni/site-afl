@@ -727,7 +727,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                   type="button"
                   onClick={() => signOut()}
                   title="Sair"
-                  className="inline-flex h-12 items-center gap-2 rounded-2xl border px-4 text-sm font-medium transition-colors hover:bg-black/[0.03]"
+                  className="group inline-flex h-12 items-center gap-2 rounded-2xl border px-4 text-sm font-medium transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                   style={{
                     background: 'var(--bg-elevated)',
                     borderColor: 'var(--line)',
@@ -735,7 +735,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                     boxShadow: 'var(--shadow-md)',
                   }}
                 >
-                  <LogOut size={16} />
+                  <LogOut size={16} className="transition-colors group-hover:text-red-600" />
                   <span className="hidden sm:inline">Sair</span>
                 </button>
               </div>
