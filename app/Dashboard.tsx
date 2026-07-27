@@ -32,7 +32,17 @@ import {
 } from 'lucide-react';
 import { signOut } from "next-auth/react";
 import SiteFooter from "./SiteFooter";
-import { getCashbackPercentage, ROLES_HIERARCHY } from "@/lib/roles";
+import { ROLES_HIERARCHY } from "@/lib/roles";
+import {
+  computeGlobalMonthStats,
+  computeMemberFinance,
+  getBonusValue,
+  getGrossValue,
+  getNetValue,
+  getPaidValue,
+  getRemainingDebt,
+  isInstallmentPayment,
+} from "@/lib/finance";
 
 const TAB_TITLES: Record<string, string> = {
   inicio: 'Visão geral',
@@ -57,11 +67,6 @@ const formatMonthName = (yearMonth: string) => {
   return `${monthNames[parseInt(month, 10) - 1]} ${year}`;
 };
 
-const getGrossValue = (r: any) => Number(r.amount ?? r.valor ?? 0);
-const getNetValue = (r: any) => Number(r.receivedAmount ?? r.valorRecebido ?? 0);
-const getBonusValue = (r: any) => Number(r.extraCashback ?? r.cashbackExtra ?? 0);
-const getPaidValue = (r: any) => Number(r.amount ?? r.valor ?? 0);
-
 const getDisplayItemName = (record: any) => {
   if ((record.type === 'CORRIDINHA' || record.tipo === 'CORRIDINHA') && (!record.item || record.item === 'N/A')) return 'BÔNUS: CORRIDINHA MALUCA';
   if ((record.type === 'SAQUE' || record.tipo === 'SAQUE') && (!record.item || record.item === 'N/A')) return 'PAGAMENTO REALIZADO';
@@ -72,10 +77,6 @@ const getDisplayClientName = (record: any) => {
   if ((record.type === 'CORRIDINHA' || record.tipo === 'CORRIDINHA') && (!record.client && !record.cliente || record.client === 'N/A' || record.cliente === 'N/A')) return 'EQUIPE AFL';
   if ((record.type === 'SAQUE' || record.tipo === 'SAQUE') && (!record.client && !record.cliente || record.client === 'N/A' || record.cliente === 'N/A')) return 'FINANCEIRO AFL';
   return (record.client && record.client !== 'N/A') ? record.client : (record.cliente && record.cliente !== 'N/A') ? record.cliente : 'SISTEMA';
-};
-
-const isInstallmentPayment = (itemName: string) => {
-  return (itemName || '').toUpperCase().includes('PAGAMENTO DE PARCELA');
 };
 
 const fetcher = async (url: string) => {
@@ -210,113 +211,32 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
     ? 'Administrador'
     : (loggedInMember?.panelRole || loggedInMember?.role || (isMaster ? 'Master AFL' : 'Agente AFL'));
 
-  const dashboardMesAtual = useMemo(() => records.filter((r: any) =>
-    (r.status === 'APROVADO' || r.status === 'ARQUIVADO') &&
-    (r.createdAt || r.criado_em)?.startsWith(currentMonthString)
-  ), [records, currentMonthString]);
+  const globalStats = useMemo(
+    () => computeGlobalMonthStats(records, currentMonthString),
+    [records, currentMonthString],
+  );
 
-  const globalStats = useMemo(() => {
-    const totalGross = dashboardMesAtual
-      .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !isInstallmentPayment(r.item))
-      .reduce((acc: number, r: any) => acc + getGrossValue(r), 0);
-
-    const netSales = dashboardMesAtual
-      .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !isInstallmentPayment(r.item))
-      .reduce((acc: number, r: any) => acc + getNetValue(r), 0);
-
-    const netInstallments = dashboardMesAtual
-      .filter((r: any) => isInstallmentPayment(r.item))
-      .reduce((acc: number, r: any) => acc + (getGrossValue(r) || getNetValue(r) || getBonusValue(r)), 0);
-
-    return { gross: totalGross, net: netSales + netInstallments };
-  }, [dashboardMesAtual]);
-
-  const backupStats = useMemo(() => {
-    const backupMonthRecords = records.filter((r: any) =>
-      (r.status === 'APROVADO' || r.status === 'ARQUIVADO') &&
-      (r.createdAt || r.criado_em)?.startsWith(backupMonth)
-    );
-
-    const totalGross = backupMonthRecords
-      .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !isInstallmentPayment(r.item))
-      .reduce((acc: number, r: any) => acc + getGrossValue(r), 0);
-
-    const netSales = backupMonthRecords
-      .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !isInstallmentPayment(r.item))
-      .reduce((acc: number, r: any) => acc + getNetValue(r), 0);
-
-    const netInstallments = backupMonthRecords
-      .filter((r: any) => isInstallmentPayment(r.item))
-      .reduce((acc: number, r: any) => acc + (getGrossValue(r) || getNetValue(r) || getBonusValue(r)), 0);
-
-    return { gross: totalGross, net: netSales + netInstallments };
-  }, [records, backupMonth]);
+  const backupStats = useMemo(
+    () => computeGlobalMonthStats(records, backupMonth),
+    [records, backupMonth],
+  );
 
   const processedTeam = useMemo(() => {
     if (!teamMembers.length) return [];
 
     return teamMembers.map((member: any) => {
       const actualRole = member.panelRole || member.cargoPainel || member.role || member.cargo || 'Membro AFL';
-      const commissionRate = getCashbackPercentage(actualRole);
-
-      const currentMonthRecords = records.filter((r: any) =>
-        String(r.discordId) === String(member.discordId) &&
-        (r.status === 'APROVADO' || r.status === 'ARQUIVADO') &&
-        (r.createdAt || r.criado_em)?.startsWith(currentMonthString)
-      );
-
-      const grossSales = currentMonthRecords
-        .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !isInstallmentPayment(r.item))
-        .reduce((acc: number, r: any) => acc + getGrossValue(r), 0);
-
-      const netSales = currentMonthRecords
-        .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !isInstallmentPayment(r.item))
-        .reduce((acc: number, r: any) => acc + getNetValue(r), 0);
-
-      const netInstallments = currentMonthRecords
-        .filter((r: any) => isInstallmentPayment(r.item))
-        .reduce((acc: number, r: any) => acc + (getGrossValue(r) || getNetValue(r) || getBonusValue(r)), 0);
-
-      const totalNet = netSales + netInstallments;
-
-      const bonusEarned = currentMonthRecords
-        .filter((r: any) => (r.type === 'CORRIDINHA' || r.tipo === 'CORRIDINHA') && !(r.item || '').toUpperCase().includes('SALDO RETIDO'))
-        .reduce((acc: number, r: any) => acc + getBonusValue(r), 0);
-
-      const amountPaid = currentMonthRecords
-        .filter((r: any) => (r.type === 'SAQUE' || r.tipo === 'SAQUE') && !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA'))
-        .reduce((acc: number, r: any) => acc + getPaidValue(r), 0);
-
-      const activeRecords = records.filter((r: any) => String(r.discordId) === String(member.discordId) && r.status === 'APROVADO');
-
-      const activeNetSales = activeRecords
-        .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !isInstallmentPayment(r.item))
-        .reduce((acc: number, r: any) => acc + getNetValue(r), 0);
-
-      const activeNetInstallments = activeRecords
-        .filter((r: any) => isInstallmentPayment(r.item))
-        .reduce((acc: number, r: any) => acc + (getGrossValue(r) || getNetValue(r) || getBonusValue(r)), 0);
-
-      const activeNet = activeNetSales + activeNetInstallments;
-
-      const activeBonus = activeRecords
-        .filter((r: any) => (r.type === 'CORRIDINHA' || r.tipo === 'CORRIDINHA'))
-        .reduce((acc: number, r: any) => acc + getBonusValue(r), 0);
-
-      const activePaid = activeRecords
-        .filter((r: any) => (r.type === 'SAQUE' || r.tipo === 'SAQUE'))
-        .reduce((acc: number, r: any) => acc + getPaidValue(r), 0);
-
-      const finalBalance = (activeNet * commissionRate) + activeBonus - activePaid;
+      const memberRecords = records.filter((r: any) => String(r.discordId) === String(member.discordId));
+      const finance = computeMemberFinance(memberRecords, actualRole, currentMonthString);
 
       return {
         ...member,
         actualRole,
-        grossSales,
-        totalNet,
-        bonusEarned,
-        amountPaid,
-        finalBalance
+        grossSales: finance.grossSales,
+        totalNet: finance.totalNet,
+        bonusEarned: finance.bonusEarned,
+        amountPaid: finance.amountPaid,
+        finalBalance: finance.finalBalance,
       };
     }).sort((a: any, b: any) => b.grossSales - a.grossSales);
   }, [teamMembers, records, currentMonthString]);
@@ -335,7 +255,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
 
   const pendingInstallments = useMemo(() => {
     return records
-      .filter((r: any) => (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && getNetValue(r) < getGrossValue(r))
+      .filter((r: any) => (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !isInstallmentPayment(r.item) && getRemainingDebt(r) > 0)
       .sort((a: any, b: any) => String(a.dueDate || a.dataVencimento || '9999').localeCompare(String(b.dueDate || b.dataVencimento || '9999')));
   }, [records]);
 
@@ -1076,7 +996,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                             <p className="mt-1 text-sm" style={{ color: 'var(--ink-soft)' }}>{record.name || record.nome}</p>
                           </div>
                           <span className="rounded-full px-3 py-1 text-xs font-semibold" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
-                            Falta R$ {formatCurrency(getGrossValue(record) - getNetValue(record))}
+                            Falta R$ {formatCurrency(getRemainingDebt(record))}
                           </span>
                         </div>
                         <div className="space-y-2 text-sm" style={{ color: 'var(--ink-soft)' }}>
@@ -1495,13 +1415,13 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                 <p className="mt-1 text-xl font-semibold">{getDisplayClientName(installmentModalData)}</p>
               </div>
               <InputField
-                label={`Recebido agora (falta R$ ${formatCurrency(getGrossValue(installmentModalData) - getNetValue(installmentModalData))})`}
+                label={`Recebido agora (falta R$ ${formatCurrency(getRemainingDebt(installmentModalData))})`}
                 type="number"
                 value={installmentValue}
                 onChange={setInstallmentValue}
                 placeholder="R$ 0,00"
               />
-              {parseFloat(installmentValue || '0') < (getGrossValue(installmentModalData) - getNetValue(installmentModalData)) && installmentValue !== '' && (
+              {parseFloat(installmentValue || '0') < getRemainingDebt(installmentModalData) && installmentValue !== '' && (
                 <div className="rounded-2xl border p-4 fade-up" style={{ borderColor: 'rgba(220,38,38,0.15)', background: 'var(--danger-soft)' }}>
                   <InputField label="Novo vencimento" type="date" value={nextDueDate} onChange={setNextDueDate} />
                 </div>

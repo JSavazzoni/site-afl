@@ -1,6 +1,6 @@
 import { MemberRepository } from '@/repositories/member.repository';
 import { RecordRepository } from '@/repositories/record.repository';
-import { getCashbackPercentage } from '@/lib/roles';
+import { computeMemberFinance, getBonusValue, getGrossValue, getPaidValue } from '@/lib/finance';
 
 export class SpreadsheetService {
   private memberRepository: MemberRepository;
@@ -19,75 +19,18 @@ export class SpreadsheetService {
     const currentMonthString = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
 
     const team = members.map(member => {
-      const actualRole = member.role || 'Membro AFL';
-      const currentRate = getCashbackPercentage(actualRole);
-
-      const currentMonthRecords = records.filter(r => 
-        String(r.discordId) === String(member.discordId) && 
-        (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
-        r.createdAt && r.createdAt.toISOString().startsWith(currentMonthString)
-      );
-
-      let grossSales = 0;
-      let netSales = 0;
-      let bonus = 0;
-      let paid = 0;
-      let activeNet = 0;
-      let activeBonus = 0;
-      let activePaid = 0;
-
-      for (const record of currentMonthRecords) {
-        const isInstallment = (record.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA');
-        const value = Number(record.amount) || 0;
-        const received = Number(record.receivedAmount) || 0;
-        const extra = Number(record.extraCashback) || 0;
-
-        if ((record.type === 'VENDA' || !record.type) && !(record.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !isInstallment) {
-            grossSales += value;
-        }
-
-        if (record.type === 'VENDA' || !record.type) {
-            if (!isInstallment) {
-                netSales += received;
-            } else {
-                netSales += value || received || extra;
-            }
-        }
-
-        if (record.type === 'CORRIDINHA' && !(record.item || '').toUpperCase().includes('SALDO RETIDO')) {
-            bonus += extra;
-        }
-
-        if (record.type === 'SAQUE' && !(record.item || '').toUpperCase().includes('DÍVIDA RETIDA')) {
-            paid += value;
-        }
-      }
-
-      const activeRecords = records.filter(r => String(r.discordId) === String(member.discordId) && r.status === 'APROVADO');
-      
-      for (const record of activeRecords) {
-         const isInstallment = (record.item || '').toUpperCase().includes('PAGAMENTO DE PARCELA');
-         if ((record.type === 'VENDA' || !record.type) && !isInstallment) {
-             activeNet += (Number(record.receivedAmount) || 0);
-         }
-         if (record.type === 'CORRIDINHA') {
-             activeBonus += (Number(record.extraCashback) || 0);
-         }
-         if (record.type === 'SAQUE') {
-             activePaid += (Number(record.amount) || 0);
-         }
-      }
-
-      const balance = (activeNet * currentRate) + activeBonus - activePaid;
+      const actualRole = member.panelRole || member.role || 'Membro AFL';
+      const memberRecords = records.filter(r => String(r.discordId) === String(member.discordId));
+      const finance = computeMemberFinance(memberRecords, actualRole, currentMonthString);
 
       return {
         name: member.name,
         role: actualRole,
-        grossSales,
-        netSales,
-        bonus,
-        paid,
-        balance
+        grossSales: finance.grossSales,
+        netSales: finance.totalNet,
+        bonus: finance.activeBonus,
+        paid: finance.activePaid,
+        balance: finance.finalBalance
       };
     }).sort((a, b) => b.grossSales - a.grossSales);
 
@@ -95,8 +38,12 @@ export class SpreadsheetService {
       date: record.createdAt ? record.createdAt.toISOString() : null,
       name: record.name,
       type: record.type || 'VENDA',
-      item: record.item && record.item !== 'N/A' ? record.item : (record.type === 'CORRIDINHA' ? 'BÔNUS: CORRIDINHA MALUCA' : (record.type === 'SAQUE' ? 'PAGAMENTO REALIZADO' : record.type)),
-      amount: Number(record.amount) || Number(record.extraCashback) || 0,
+      item: record.item && record.item !== 'N/A'
+        ? record.item
+        : (record.type === 'CORRIDINHA'
+          ? 'BÔNUS: CORRIDINHA MALUCA'
+          : (record.type === 'SAQUE' ? 'PAGAMENTO REALIZADO' : record.type)),
+      amount: getGrossValue(record) || getBonusValue(record) || getPaidValue(record),
       status: record.status
     }));
 

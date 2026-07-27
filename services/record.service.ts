@@ -109,7 +109,8 @@ export class RecordService {
       await this.recordRepository.updateStatus(recordId, 'APROVADO', evaluatedBy);
 
       const value = Number(record.amount) || 0;
-      const received = Number(record.receivedAmount) || value;
+      const receivedRaw = Number(record.receivedAmount);
+      const received = Number.isFinite(receivedRaw) ? receivedRaw : value;
       const extra = Number(record.extraCashback) || 0;
 
       if (record.discordId) {

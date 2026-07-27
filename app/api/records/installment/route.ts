@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentAccess } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getRemainingDebt, roundMoney } from '@/lib/finance';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,22 +13,37 @@ export async function POST(req: Request) {
     }
 
     const { recordId, paidAmount, nextDueDate } = await req.json();
+    const payment = roundMoney(Number(paidAmount));
+
+    if (!Number.isFinite(payment) || payment <= 0) {
+      return NextResponse.json({ error: 'Informe um valor de pagamento válido.' }, { status: 400 });
+    }
 
     const originalRecord = await prisma.record.findUnique({
       where: { id: recordId }
     });
 
     if (!originalRecord) {
-      throw new Error("Registro de venda não encontrado");
+      return NextResponse.json({ error: 'Registro de venda não encontrado.' }, { status: 404 });
     }
 
-    const newReceivedAmount = (originalRecord.receivedAmount || 0) + paidAmount;
-    
+    const remaining = getRemainingDebt(originalRecord);
+    if (payment > remaining + 0.001) {
+      return NextResponse.json({ error: `Pagamento maior que o saldo em aberto (R$ ${remaining.toFixed(2)}).` }, { status: 400 });
+    }
+
+    const newReceivedAmount = roundMoney((originalRecord.receivedAmount || 0) + payment);
+    const stillPending = newReceivedAmount < (originalRecord.amount || 0);
+
+    if (stillPending && !nextDueDate) {
+      return NextResponse.json({ error: 'Informe o novo vencimento da pendência.' }, { status: 400 });
+    }
+
     await prisma.record.update({
       where: { id: recordId },
       data: {
         receivedAmount: newReceivedAmount,
-        dueDate: nextDueDate || null
+        dueDate: stillPending ? (nextDueDate || null) : null
       }
     });
 
@@ -38,13 +54,20 @@ export async function POST(req: Request) {
         type: "VENDA",
         item: `PAGAMENTO DE PARCELA: ${originalRecord.item || "N/A"}`,
         client: originalRecord.client,
-        amount: paidAmount,
-        receivedAmount: paidAmount,
+        amount: payment,
+        receivedAmount: payment,
         status: "APROVADO",
         createdBy: "Sistema",
         evaluatedBy: "Sistema Automático"
       }
     });
+
+    if (originalRecord.discordId) {
+      await prisma.member.updateMany({
+        where: { discordId: originalRecord.discordId },
+        data: { receivedValue: { increment: payment } },
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
