@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const payload = await spreadsheetService.generateExportPayload();
     
     return NextResponse.json(payload);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Falha ao exportar planilha.' }, { status: 500 });
   }
 }

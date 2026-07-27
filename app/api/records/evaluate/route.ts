@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     const { recordId, action, evaluatedBy } = await req.json();
     await recordService.evaluateRecord(recordId, action, evaluatedBy);
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Falha ao avaliar registro.' }, { status: 500 });
   }
 }

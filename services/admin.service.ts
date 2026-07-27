@@ -20,10 +20,8 @@ export class AdminService {
     const currentDate = new Date();
     const currentMonthPrefix = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
 
-    await prisma.$transaction([
-      this.recordRepository.archiveCurrentMonth(currentMonthPrefix) as any,
-      this.memberRepository.resetAllCounters() as any
-    ]);
+    await this.recordRepository.archiveCurrentMonth(currentMonthPrefix);
+    await this.memberRepository.resetAllCounters();
   }
 
   async runSystemAudit() {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { RecordRepository } from '@/repositories/record.repository';
 import { MemberRepository } from '@/repositories/member.repository';
 

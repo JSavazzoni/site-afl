@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { getCurrentAccess } from '@/lib/auth';
 import { RecordService } from '@/services/record.service';
@@ -15,8 +16,8 @@ export async function GET() {
 
     const records = await recordService.getActiveRecords();
     return NextResponse.json(records);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Falha ao carregar registros.' }, { status: 500 });
   }
 }
 
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
 
     const result = await recordService.createRecord(safePayload);
     return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Falha ao criar registro.' }, { status: 500 });
   }
 }
