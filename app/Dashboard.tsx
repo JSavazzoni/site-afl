@@ -165,12 +165,13 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
       const loggedUser = teamMembers.find((m: any) => String(m.discordId) === String(userSession.user.id));
       if (loggedUser) {
         const userCurrentRole = loggedUser.panelRole || loggedUser.role || "";
-        if (!ROLES_HIERARCHY.includes(userCurrentRole)) {
+        const stillActive = ROLES_HIERARCHY.includes(userCurrentRole) || Boolean(initialPermissions?.isAdmin);
+        if (!stillActive) {
           signOut({ callbackUrl: '/login' });
         }
       }
     }
-  }, [teamMembers, userSession]);
+  }, [teamMembers, userSession, initialPermissions?.isAdmin]);
 
   useEffect(() => {
     if (records.length > 0 && !backupMonth) {

@@ -90,11 +90,14 @@ export async function GET() {
     }
 
     // 2. VARREDURA DE REMOÇÃO (Lê o banco e chuta quem perdeu o cargo)
+    const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID || "";
     for (const dbMember of members) {
       const dMember = discordMembers.find((dm: any) => dm.user.id === dbMember.discordId);
-      const resolvedRole = dMember ? resolveHighestRole(dMember.roles) : null;
+      const memberRoles = Array.isArray(dMember?.roles) ? dMember.roles.map(String) : [];
+      const resolvedRole = dMember ? resolveHighestRole(memberRoles) : null;
+      const isDiscordAdmin = Boolean(adminRoleId && memberRoles.includes(String(adminRoleId)));
 
-      if (!resolvedRole) {
+      if (!resolvedRole && !isDiscordAdmin) {
         const fallbackRole = dbMember.panelRole || dbMember.role || "";
         if (!fallbackRole.includes("Ex-Membro")) {
           await prisma.member.update({
