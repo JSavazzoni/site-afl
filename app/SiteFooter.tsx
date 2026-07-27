@@ -1,7 +1,7 @@
 export default function SiteFooter() {
   return (
     <footer
-      className="mt-auto border-t px-6 py-8 text-center text-sm"
+      className="mt-auto shrink-0 border-t px-6 py-8 text-center text-sm"
       style={{
         borderColor: "var(--line)",
         color: "var(--ink-soft)",
