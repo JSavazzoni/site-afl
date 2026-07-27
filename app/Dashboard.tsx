@@ -601,7 +601,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   ];
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
+    <div className="flex min-h-full flex-1 flex-col" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -681,7 +681,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
         </div>
       )}
 
-      <div className="flex min-h-screen">
+      <div className="flex min-h-full flex-1">
         <aside
           className="hidden lg:flex lg:w-72 lg:flex-col lg:justify-between lg:border-r lg:p-6"
           style={{ background: 'var(--sidebar)', color: 'var(--sidebar-ink)', borderColor: 'rgba(255,255,255,0.08)' }}
@@ -755,29 +755,29 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                         </div>
                         <Trophy size={24} style={{ color: 'var(--brand)' }} />
                       </div>
-                      <div className="flex h-72 items-end gap-3 overflow-x-auto pt-4">
+                      <div className="flex h-72 gap-3 overflow-x-auto pt-2">
                         {activeTeam.slice(0, 5).map((member: any) => {
                           const fillPercentage = member.grossSales > 0 ? (member.grossSales / maxGrossChart) * 100 : 0;
-                          const adjustedHeight = member.grossSales > 0 ? Math.max(5, fillPercentage) : 0;
+                          const adjustedHeight = member.grossSales > 0 ? Math.max(8, fillPercentage) : 0;
                           return (
-                            <div key={member.discordId} className="flex min-w-[110px] flex-1 flex-col items-center justify-end gap-3">
-                              <span className="text-xs font-medium" style={{ color: 'var(--ink-soft)' }}>
+                            <div key={member.discordId} className="flex h-full min-w-[110px] flex-1 flex-col items-center gap-2">
+                              <span className="shrink-0 text-xs font-medium" style={{ color: 'var(--ink-soft)' }}>
                                 R$ {formatCurrency(member.grossSales)}
                               </span>
                               <div
-                                className="flex h-full w-full max-w-[90px] items-end overflow-hidden rounded-t-[28px] border border-b-0"
+                                className="flex w-full max-w-[90px] flex-1 items-end overflow-hidden rounded-t-2xl border border-b-0"
                                 style={{ background: 'var(--bg-muted)', borderColor: 'var(--line)' }}
                               >
                                 <div
-                                  className="w-full rounded-t-[22px] transition-all duration-700"
+                                  className="w-full rounded-t-xl transition-all duration-700"
                                   style={{
                                     height: `${adjustedHeight}%`,
                                     background: 'linear-gradient(180deg, var(--brand) 0%, var(--brand-strong) 100%)',
                                   }}
                                 />
                               </div>
-                              <span className="w-full truncate text-center text-sm font-medium" title={member.name || member.nome}>
-                                {member.name || member.nome}
+                              <span className="w-full shrink-0 truncate text-center text-sm font-medium" title={member.name || member.nome}>
+                                {member.name || member.nome || '—'}
                               </span>
                             </div>
                           );
@@ -1301,10 +1301,6 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
               </>
             )}
 
-            <footer className="mt-10 border-t pt-6 text-center text-sm" style={{ borderColor: 'var(--line)', color: 'var(--ink-soft)' }}>
-              <p>© {new Date().getFullYear()} AFL Painel • Todos os direitos reservados</p>
-              <p className="mt-1">Desenvolvido por <span style={{ color: 'var(--brand-strong)' }}>{'</>'} VZ</span></p>
-            </footer>
           </div>
         </main>
       </div>

@@ -5,10 +5,10 @@ import { signOut } from "next-auth/react";
 
 export default function AccessDenied() {
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="relative flex min-h-full flex-1 overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(192,53,58,0.12),transparent_34%),linear-gradient(180deg,#f7f8fa_0%,#eef1f5_100%)]" />
 
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-lg items-center px-6 py-12">
+      <div className="relative z-10 mx-auto flex min-h-full w-full max-w-lg flex-1 items-center px-6 py-12">
         <div className="fade-up surface w-full rounded-[28px] p-8 text-center sm:p-10">
           <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--danger-soft)] text-[var(--danger)]">
             <ShieldAlert size={28} />

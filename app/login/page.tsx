@@ -5,12 +5,12 @@ import { LogIn, ShieldCheck } from "lucide-react";
 
 export default function Login() {
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="relative flex min-h-full flex-1 overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(200,155,12,0.18),transparent_32%),linear-gradient(135deg,#10131a_0%,#1a1f2a_48%,#0f1218_100%)]" />
       <div className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-[rgba(200,155,12,0.12)] blur-3xl" />
       <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-[rgba(255,255,255,0.04)] blur-3xl" />
 
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl items-center px-6 py-12 lg:px-10">
+      <div className="relative z-10 mx-auto flex min-h-full w-full max-w-6xl flex-1 items-center px-6 py-12 lg:px-10">
         <div className="grid w-full gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
           <section className="fade-up text-white">
             <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 backdrop-blur">
