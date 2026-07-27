@@ -27,8 +27,8 @@ export default function Login() {
               </p>
             </section>
 
-            <section className="fade-up surface rounded-[28px] p-8 sm:p-10">
-              <div className="brand-mark mb-6">
+            <section className="fade-up surface rounded-[28px] p-8 text-center sm:p-10">
+              <div className="brand-mark mx-auto mb-6">
                 <span className="text-sm font-bold tracking-wide">AFL</span>
               </div>
               <h2 className="text-2xl font-semibold tracking-tight text-[var(--ink)]">Entrar no painel</h2>
@@ -44,7 +44,7 @@ export default function Login() {
                 Entrar com Discord
               </button>
 
-              <p className="mt-6 text-center text-xs leading-5 text-[var(--ink-faint)]">
+              <p className="mt-6 text-xs leading-5 text-[var(--ink-faint)]">
                 Sem cargo autorizado no servidor, o acesso será bloqueado automaticamente.
               </p>
             </section>
