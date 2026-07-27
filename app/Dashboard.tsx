@@ -1591,15 +1591,6 @@ function SidebarContent({
           ))}
         </nav>
       </div>
-
-      <button
-        type="button"
-        onClick={() => signOut()}
-        className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium transition-colors hover:bg-white/10"
-      >
-        <LogOut size={16} />
-        Desconectar
-      </button>
     </>
   );
 }
