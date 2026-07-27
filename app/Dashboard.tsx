@@ -31,6 +31,7 @@ import {
   Menu,
 } from 'lucide-react';
 import { signOut } from "next-auth/react";
+import SiteFooter from "./SiteFooter";
 import { getCashbackPercentage, ROLES_HIERARCHY } from "@/lib/roles";
 
 const TAB_TITLES: Record<string, string> = {
@@ -594,7 +595,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   ];
 
   return (
-    <div className="flex min-h-full flex-1 flex-col" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
+    <div className="flex min-h-[100dvh] flex-1 flex-col" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -674,7 +675,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
         </div>
       )}
 
-      <div className="flex min-h-full flex-1">
+      <div className="flex flex-1">
         <aside
           className="hidden lg:flex lg:w-72 lg:flex-col lg:justify-between lg:border-r lg:p-6"
           style={{ background: 'var(--sidebar)', color: 'var(--sidebar-ink)', borderColor: 'rgba(255,255,255,0.08)' }}
@@ -1295,6 +1296,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
             )}
 
           </div>
+          <SiteFooter />
         </main>
       </div>
 

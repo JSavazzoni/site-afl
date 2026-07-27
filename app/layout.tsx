@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Sora } from "next/font/google";
-import SiteFooter from "./SiteFooter";
 import "./globals.css";
 
 const sora = Sora({
@@ -39,9 +38,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${sora.variable} flex min-h-[100dvh] flex-col font-sans antialiased text-[var(--ink)]`}>
-        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
-        <SiteFooter />
+      <body className={`${sora.variable} font-sans antialiased text-[var(--ink)]`}>
+        {children}
       </body>
     </html>
   );
