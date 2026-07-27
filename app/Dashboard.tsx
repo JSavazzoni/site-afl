@@ -327,18 +327,14 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
 
   useEffect(() => {
     if (!requireDueDate) {
-      if (formData.dueDate) {
-        setFormData((current) => (current.dueDate ? { ...current, dueDate: '' } : current));
-      }
+      setFormData((current) => (current.dueDate ? { ...current, dueDate: '' } : current));
       return;
     }
 
-    if (!formData.dueDate) {
-      setFormData((current) => (
-        current.dueDate ? current : { ...current, dueDate: getDatePlusOneMonth() }
-      ));
-    }
-  }, [requireDueDate, formData.dueDate]);
+    setFormData((current) => (
+      current.dueDate ? current : { ...current, dueDate: getDatePlusOneMonth() }
+    ));
+  }, [requireDueDate]);
 
   useEffect(() => {
     if (!canPostSales) return;
