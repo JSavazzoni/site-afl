@@ -13,8 +13,8 @@ export async function POST() {
       return NextResponse.json({ error: 'Não autorizado.' }, { status: 403 });
     }
 
-    await adminService.executeMonthRollover();
-    return NextResponse.json({ success: true });
+    const result = await adminService.executeMonthRollover();
+    return NextResponse.json({ success: true, ...result });
   } catch (error: unknown) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Falha ao executar virada.' }, { status: 500 });
   }
