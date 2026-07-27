@@ -114,6 +114,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const isAdmin = Boolean(initialPermissions?.isAdmin);
   const isMaster = Boolean(initialPermissions?.isMaster);
   const canPostSales = Boolean(initialPermissions?.canPostSales);
+  const canPostExtras = Boolean(initialPermissions?.canPostExtras ?? (initialPermissions?.isAdmin || initialPermissions?.isMaster));
   const canApproveRecords = Boolean(initialPermissions?.canApproveRecords);
   const [isLoading, setIsLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -181,7 +182,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const loggedInMember = useMemo(() => teamMembers.find((m: any) => String(m.discordId) === String(userSession?.user?.id)), [teamMembers, userSession]);
   const displayUserName = loggedInMember?.nome || loggedInMember?.name || userSession?.user?.name || 'Agente';
   const displayUserAvatar = loggedInMember?.avatar || userSession?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayUserName)}&background=EAB308&color=000&bold=true`;
-  const canSelectAnySeller = isAdmin;
+  const canSelectAnySeller = isAdmin || isMaster;
   const roleLabel = isAdmin
     ? 'Administrador'
     : (loggedInMember?.panelRole || loggedInMember?.role || (isMaster ? 'Master AFL' : 'Agente AFL'));
@@ -693,8 +694,8 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
           />
         </aside>
 
-        <main className="flex-1">
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+        <main className="flex flex-1 flex-col">
+          <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
             <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between fade-up">
               <div>
                 <p className="mb-2 text-sm font-medium" style={{ color: 'var(--ink-soft)' }}>
@@ -704,21 +705,38 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                   {TAB_TITLES[activeTab] || 'Painel'}
                 </h1>
               </div>
-              <div
-                className="inline-flex items-center gap-3 rounded-2xl border px-3 py-3"
-                style={{
-                  background: 'var(--bg-elevated)',
-                  borderColor: 'var(--line)',
-                  boxShadow: 'var(--shadow-md)',
-                }}
-              >
-                <img src={displayUserAvatar} alt="" className="h-11 w-11 rounded-xl object-cover" />
-                <div>
-                  <p className="text-sm font-semibold">{displayUserName}</p>
-                  <p className="text-xs" style={{ color: 'var(--ink-soft)' }}>
-                    {roleLabel}
-                  </p>
+              <div className="flex items-center gap-3">
+                <div
+                  className="inline-flex items-center gap-3 rounded-2xl border px-3 py-3"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    borderColor: 'var(--line)',
+                    boxShadow: 'var(--shadow-md)',
+                  }}
+                >
+                  <img src={displayUserAvatar} alt="" className="h-11 w-11 rounded-xl object-cover" />
+                  <div>
+                    <p className="text-sm font-semibold">{displayUserName}</p>
+                    <p className="text-xs" style={{ color: 'var(--ink-soft)' }}>
+                      {roleLabel}
+                    </p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => signOut()}
+                  title="Sair"
+                  className="inline-flex h-12 items-center gap-2 rounded-2xl border px-4 text-sm font-medium transition-colors hover:bg-black/[0.03]"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    borderColor: 'var(--line)',
+                    color: 'var(--ink-soft)',
+                    boxShadow: 'var(--shadow-md)',
+                  }}
+                >
+                  <LogOut size={16} />
+                  <span className="hidden sm:inline">Sair</span>
+                </button>
               </div>
             </header>
 
@@ -934,7 +952,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                         {[
                           { id: 'VENDA', label: 'Venda', icon: <ShoppingCart size={16} /> },
-                          ...(isAdmin ? [{ id: 'CORRIDINHA', label: 'Bônus', icon: <Zap size={16} /> }, { id: 'SAQUE', label: 'Pagamento', icon: <Banknote size={16} /> }] : [])
+                          ...(canPostExtras ? [{ id: 'CORRIDINHA', label: 'Bônus', icon: <Zap size={16} /> }, { id: 'SAQUE', label: 'Pagamento', icon: <Banknote size={16} /> }] : [])
                         ].map(typeConfig => (
                           <button
                             key={typeConfig.id}
@@ -973,7 +991,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                           </select>
                           {!canSelectAnySeller && (
                             <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>
-                              Sua venda sera postada no seu proprio nome e ficara pendente para aprovacao do master.
+                              Sua venda será postada no seu próprio nome e ficará pendente para aprovação do Master.
                             </p>
                           )}
                         </div>
@@ -1116,51 +1134,83 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
 
                 {activeTab === 'admin_zone' && isAdmin && (
                   <div className="space-y-6 fade-up">
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <section className="surface rounded-[var(--radius-md)] border p-6" style={{ borderColor: 'rgba(220,38,38,0.18)', boxShadow: 'var(--shadow-md)' }}>
-                        <div className="mb-4 flex items-center gap-3">
-                          <Archive size={22} style={{ color: 'var(--danger)' }} />
-                          <h2 className="text-xl font-semibold">Virada de mês</h2>
+                    <div className="surface rounded-[var(--radius-md)] border p-5 sm:p-6" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                          <h2 className="text-xl font-semibold">Central administrativa</h2>
+                          <p className="mt-1 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                            Operações sensíveis do mês, restauração e auditoria dos registros.
+                          </p>
                         </div>
-                        <p className="mb-5 text-sm" style={{ color: 'var(--ink-soft)' }}>
-                          Arquiva as vendas e zera contadores. USE APENAS NO DIA 1º.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleMonthRolloverRequest}
-                          disabled={isLoading}
-                          className="w-full rounded-2xl px-4 py-3 text-sm font-semibold"
-                          style={{ background: 'var(--danger)', color: 'white', opacity: isLoading ? 0.6 : 1 }}
-                        >
-                          Executar virada
-                        </button>
+                        <div className="rounded-full px-3 py-1 text-xs font-medium" style={{ background: 'var(--bg-muted)', color: 'var(--ink-soft)' }}>
+                          Acesso restrito
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                      <section className="surface relative overflow-hidden rounded-[var(--radius-md)] border p-6" style={{ borderColor: 'rgba(220,38,38,0.16)', boxShadow: 'var(--shadow-md)' }}>
+                        <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full" style={{ background: 'rgba(220,38,38,0.06)' }} />
+                        <div className="relative">
+                          <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
+                            <Archive size={20} />
+                          </div>
+                          <h3 className="text-lg font-semibold">Virada de mês</h3>
+                          <p className="mt-2 text-sm leading-6" style={{ color: 'var(--ink-soft)' }}>
+                            Arquiva as vendas do período atual e zera os contadores da equipe. Use somente no dia 1º.
+                          </p>
+                          <ul className="mt-4 space-y-2 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                            <li>• Registros aprovados passam para histórico</li>
+                            <li>• Contadores de produção são zerados</li>
+                            <li>• Ação irreversível sem restauração</li>
+                          </ul>
+                          <button
+                            type="button"
+                            onClick={handleMonthRolloverRequest}
+                            disabled={isLoading}
+                            className="mt-6 w-full rounded-2xl px-4 py-3 text-sm font-semibold"
+                            style={{ background: 'var(--danger)', color: 'white', opacity: isLoading ? 0.6 : 1 }}
+                          >
+                            Executar virada
+                          </button>
+                        </div>
                       </section>
 
-                      <section className="surface rounded-[var(--radius-md)] border p-6" style={{ borderColor: 'rgba(200,155,12,0.22)', boxShadow: 'var(--shadow-md)' }}>
-                        <div className="mb-4 flex items-center gap-3">
-                          <Database size={22} style={{ color: 'var(--warning)' }} />
-                          <h2 className="text-xl font-semibold">Restaurar sistema</h2>
+                      <section className="surface relative overflow-hidden rounded-[var(--radius-md)] border p-6" style={{ borderColor: 'rgba(200,155,12,0.22)', boxShadow: 'var(--shadow-md)' }}>
+                        <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full" style={{ background: 'rgba(200,155,12,0.08)' }} />
+                        <div className="relative">
+                          <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl" style={{ background: 'var(--warning-soft)', color: 'var(--warning)' }}>
+                            <Database size={20} />
+                          </div>
+                          <h3 className="text-lg font-semibold">Restaurar sistema</h3>
+                          <p className="mt-2 text-sm leading-6" style={{ color: 'var(--ink-soft)' }}>
+                            Desfaz uma virada precoce e devolve vendas arquivadas para o painel principal.
+                          </p>
+                          <ul className="mt-4 space-y-2 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                            <li>• Restaura status ARQUIVADO → APROVADO</li>
+                            <li>• Útil para correção imediata</li>
+                            <li>• Não apaga registros</li>
+                          </ul>
+                          <button
+                            type="button"
+                            onClick={handleSystemRestoreRequest}
+                            disabled={isLoading}
+                            className="mt-6 w-full rounded-2xl px-4 py-3 text-sm font-semibold"
+                            style={{ background: 'var(--brand)', color: '#221a00', opacity: isLoading ? 0.6 : 1 }}
+                          >
+                            Restaurar vendas
+                          </button>
                         </div>
-                        <p className="mb-5 text-sm" style={{ color: 'var(--ink-soft)' }}>
-                          Desfaz erro da virada precoce. Volta as vendas para o Painel.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleSystemRestoreRequest}
-                          disabled={isLoading}
-                          className="w-full rounded-2xl px-4 py-3 text-sm font-semibold"
-                          style={{ background: 'var(--warning-soft)', color: 'var(--warning)', opacity: isLoading ? 0.6 : 1 }}
-                        >
-                          Restaurar vendas
-                        </button>
                       </section>
                     </div>
 
                     <section className="surface overflow-hidden rounded-[var(--radius-md)] border" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
-                      <div className="flex flex-col gap-4 border-b p-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--line)' }}>
+                      <div className="flex flex-col gap-4 border-b p-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--line)', background: 'linear-gradient(180deg, rgba(200,155,12,0.05), transparent)' }}>
                         <div>
-                          <h2 className="text-lg font-semibold">Logs de dados</h2>
-                          <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>Registros aprovados e autoria da ação</p>
+                          <h2 className="text-lg font-semibold">Auditoria de logs</h2>
+                          <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>
+                            {filteredLogs.length} registro{filteredLogs.length === 1 ? '' : 's'} aprovado{filteredLogs.length === 1 ? '' : 's'}
+                          </p>
                         </div>
                         <div className="w-full sm:w-80">
                           <SearchField
@@ -1169,7 +1219,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                               setLogSearchQuery(value);
                               setLogPaginationLimit(20);
                             }}
-                            placeholder="Buscar registro..."
+                            placeholder="Buscar por membro, item ou tipo..."
                           />
                         </div>
                       </div>
@@ -1178,8 +1228,8 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                           <thead style={{ background: 'var(--bg-muted)', color: 'var(--ink-soft)' }}>
                             <tr>
                               <th className="px-5 py-4 text-sm font-semibold">Membro</th>
-                              <th className="px-5 py-4 text-sm font-semibold">Tipo</th>
-                              <th className="px-5 py-4 text-sm font-semibold">Autoria da ação</th>
+                              <th className="px-5 py-4 text-sm font-semibold">Tipo / valor</th>
+                              <th className="px-5 py-4 text-sm font-semibold">Autoria</th>
                               <th className="px-5 py-4 text-right text-sm font-semibold">Ação</th>
                             </tr>
                           </thead>
@@ -1188,24 +1238,28 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                               <tr key={record.id} className="border-t transition-colors hover:bg-black/[0.02]" style={{ borderColor: 'var(--line)' }}>
                                 <td className="px-5 py-4 text-sm font-medium">{record.name || record.nome}</td>
                                 <td className="px-5 py-4">
-                                  <span className="rounded-full border px-3 py-1 text-xs font-medium" style={{ borderColor: 'var(--line)', color: 'var(--ink-soft)' }}>
-                                    {record.type || record.tipo} • R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record) || getPaidValue(record))}
-                                  </span>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <TypeBadge type={record.type || record.tipo || 'VENDA'} />
+                                    <span className="font-mono text-sm font-semibold">
+                                      R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record) || getPaidValue(record))}
+                                    </span>
+                                  </div>
                                 </td>
                                 <td className="px-5 py-4 text-sm" style={{ color: 'var(--ink-soft)' }}>
                                   <div className="space-y-1">
-                                    <div>Postou: {record.createdBy || record.criadoPor || 'Sistema'}</div>
-                                    <div>Aprovou: {record.evaluatedBy || record.avaliadoPor || 'N/A'}</div>
+                                    <div><span style={{ color: 'var(--ink)' }}>Postou:</span> {record.createdBy || record.criadoPor || 'Sistema'}</div>
+                                    <div><span style={{ color: 'var(--ink)' }}>Aprovou:</span> {record.evaluatedBy || record.avaliadoPor || 'N/A'}</div>
                                   </div>
                                 </td>
                                 <td className="px-5 py-4 text-right">
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteLogRequest(record.id)}
-                                    className="inline-flex rounded-xl p-2 transition-colors"
+                                    className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors"
                                     style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}
                                   >
-                                    <Trash2 size={16} />
+                                    <Trash2 size={14} />
+                                    Excluir
                                   </button>
                                 </td>
                               </tr>
@@ -1225,28 +1279,48 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
 
                 {activeTab === 'historico_backup' && isAdmin && (
                   <div className="space-y-6 fade-up">
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-                      <section className="surface rounded-[var(--radius-md)] border p-5" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
-                        <label className="mb-2 block text-sm font-medium">Período</label>
-                        <select
-                          value={backupMonth}
-                          onChange={(e) => setBackupMonth(e.target.value)}
-                          className="w-full rounded-2xl border px-4 py-3 outline-none"
-                          style={{ background: 'var(--bg)', borderColor: 'var(--line)', color: 'var(--ink)' }}
-                        >
-                          <option value="">Selecione...</option>
-                          {availableMonths.map((monthOption: any) => <option key={monthOption} value={monthOption}>{formatMonthName(monthOption)}</option>)}
-                        </select>
-                      </section>
-                      <div className="grid grid-cols-2 gap-4">
-                        <StatMiniCard label="Bruto" value={`R$ ${formatCurrency(backupStats.gross)}`} />
-                        <StatMiniCard label="Caixa" value={`R$ ${formatCurrency(backupStats.net)}`} highlight />
+                    <div className="surface rounded-[var(--radius-md)] border p-5 sm:p-6" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                          <h2 className="text-xl font-semibold">Histórico mensal</h2>
+                          <p className="mt-1 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                            Consulte produção e registros por período fechado ou aberto.
+                          </p>
+                        </div>
+                        <div className="w-full max-w-sm">
+                          <label className="mb-2 block text-sm font-medium">Período</label>
+                          <select
+                            value={backupMonth}
+                            onChange={(e) => setBackupMonth(e.target.value)}
+                            className="w-full rounded-2xl border px-4 py-3 outline-none"
+                            style={{ background: 'var(--bg)', borderColor: 'var(--line)', color: 'var(--ink)' }}
+                          >
+                            <option value="">Selecione o mês...</option>
+                            {availableMonths.map((monthOption: any) => (
+                              <option key={monthOption} value={monthOption}>{formatMonthName(monthOption)}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <StatMiniCard label="Bruto do período" value={`R$ ${formatCurrency(backupStats.gross)}`} />
+                      <StatMiniCard label="Caixa do período" value={`R$ ${formatCurrency(backupStats.net)}`} highlight />
+                      <StatMiniCard label="Registros listados" value={`${filteredHistory.length}`} />
+                    </div>
+
                     <section className="surface overflow-hidden rounded-[var(--radius-md)] border" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
-                      <div className="border-b p-5" style={{ borderColor: 'var(--line)' }}>
-                        <div className="max-w-md">
+                      <div className="flex flex-col gap-4 border-b p-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--line)' }}>
+                        <div>
+                          <h3 className="text-lg font-semibold">
+                            {backupMonth ? formatMonthName(backupMonth) : 'Selecione um período'}
+                          </h3>
+                          <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>
+                            Movimentações do mês selecionado
+                          </p>
+                        </div>
+                        <div className="w-full sm:w-96">
                           <SearchField
                             value={historySearchQuery}
                             onChange={(value) => {
@@ -1271,7 +1345,9 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                             {filteredHistory.slice(0, historyPaginationLimit).map((record: any) => (
                               <tr key={record.id} className="border-t transition-colors hover:bg-black/[0.02]" style={{ borderColor: 'var(--line)' }}>
                                 <td className="px-5 py-4 text-sm font-medium">{record.name || record.nome}</td>
-                                <td className="px-5 py-4 text-sm" style={{ color: 'var(--ink-soft)' }}>{record.type || record.tipo}</td>
+                                <td className="px-5 py-4">
+                                  <TypeBadge type={record.type || record.tipo || 'VENDA'} />
+                                </td>
                                 <td className="px-5 py-4 font-mono text-sm font-semibold" style={{ color: record.type === 'SAQUE' || record.tipo === 'SAQUE' ? 'var(--danger)' : 'var(--success)' }}>
                                   {record.type === 'SAQUE' || record.tipo === 'SAQUE' ? '-' : '+'} R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record) || getPaidValue(record))}
                                 </td>
@@ -1287,7 +1363,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                         currentLength={filteredHistory.length}
                         limit={historyPaginationLimit}
                         onClick={() => setHistoryPaginationLimit(prev => prev + 20)}
-                        emptyText="Nenhum registro encontrado."
+                        emptyText={backupMonth ? 'Nenhum registro encontrado neste período.' : 'Selecione um mês para ver o histórico.'}
                       />
                     </section>
                   </div>

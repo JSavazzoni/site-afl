@@ -98,6 +98,7 @@ export async function getCurrentAccess() {
     isAdmin,
     isMaster,
     canPostSales: isPanelMember,
+    canPostExtras: isAdmin || isMaster,
     canApproveRecords: isAdmin || isMaster,
   };
 }

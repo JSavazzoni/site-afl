@@ -22,6 +22,7 @@ export default async function HomePage() {
         isAdmin: access.isAdmin,
         isMaster: access.isMaster,
         canPostSales: access.canPostSales,
+        canPostExtras: access.canPostExtras,
         canApproveRecords: access.canApproveRecords,
       }}
       userSession={session}
