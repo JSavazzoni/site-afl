@@ -180,6 +180,28 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
     }
   }, [records, backupMonth]);
 
+  useEffect(() => {
+    const shouldLockScroll = Boolean(selectedMember || installmentModalData || confirmationModalData?.aberto);
+    if (!shouldLockScroll) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.paddingRight = previousBodyPaddingRight;
+    };
+  }, [selectedMember, installmentModalData, confirmationModalData]);
+
   const loggedInMember = useMemo(() => teamMembers.find((m: any) => String(m.discordId) === String(userSession?.user?.id)), [teamMembers, userSession]);
   const displayUserName = loggedInMember?.nome || loggedInMember?.name || userSession?.user?.name || 'Agente';
   const displayUserAvatar = loggedInMember?.avatar || userSession?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayUserName)}&background=EAB308&color=000&bold=true`;
@@ -1378,9 +1400,9 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
       </div>
 
       {selectedMember && activeModalMember && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/40 p-4 backdrop-blur-sm">
           <div className="surface fade-up flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
-            <div className="border-b p-6 sm:p-8" style={{ borderColor: 'var(--line)', background: 'linear-gradient(180deg, rgba(200,155,12,0.08), transparent)' }}>
+            <div className="shrink-0 border-b p-6 sm:p-8" style={{ borderColor: 'var(--line)', background: 'linear-gradient(180deg, rgba(200,155,12,0.08), transparent)' }}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 items-center gap-4 sm:gap-5">
                   <img src={activeModalMember.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeModalMember.name || activeModalMember.nome || 'User')}&background=EAB308&color=000&bold=true`} className="h-20 w-20 rounded-[24px] object-cover sm:h-24 sm:w-24" alt="" />
@@ -1404,7 +1426,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
               </div>
             </div>
 
-            <div className="grid flex-1 grid-cols-1 gap-6 overflow-y-auto p-6 sm:p-8 lg:grid-cols-2">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-y-auto overscroll-contain p-6 sm:p-8 lg:grid-cols-2">
               <div className="space-y-4">
                 <section className="rounded-[24px] p-6" style={{ background: 'var(--success-soft)', color: 'var(--success)' }}>
                   <p className="text-sm font-medium">Saldo a receber</p>
