@@ -1,33 +1,52 @@
 "use client";
+
 import { signIn } from "next-auth/react";
-import { UsersRound, LogIn } from "lucide-react";
+import { LogIn, ShieldCheck } from "lucide-react";
 
 export default function Login() {
   return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 selection:bg-yellow-400 font-sans relative overflow-hidden">
-      {/* Luz de fundo amarela */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-yellow-400/5 rounded-full blur-[120px] pointer-events-none"></div>
-      
-      <div className="bg-[#0a0a0a] border border-white/5 p-12 rounded-[3rem] w-full max-w-md shadow-2xl relative z-10 flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
-        <div className="p-5 bg-yellow-400 rounded-3xl text-black shadow-[0_0_40px_rgba(250,204,21,0.3)] mb-8">
-          <UsersRound size={48} strokeWidth={2.5} />
-        </div>
-        
-        <h1 className="text-4xl font-black uppercase italic tracking-tighter text-white mb-2">
-          AFL<span className="text-yellow-400 ml-1">PAINEL</span>
-        </h1>
-        
-        <p className="text-zinc-500 text-[11px] font-black uppercase tracking-[0.3em] mb-12 italic">
-          Acesso restrito a membros
-        </p>
+    <div className="relative min-h-screen overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(200,155,12,0.18),transparent_32%),linear-gradient(135deg,#10131a_0%,#1a1f2a_48%,#0f1218_100%)]" />
+      <div className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-[rgba(200,155,12,0.12)] blur-3xl" />
+      <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-[rgba(255,255,255,0.04)] blur-3xl" />
 
-        <button 
-          onClick={() => signIn("discord", { callbackUrl: "/" })}
-          className="w-full flex items-center justify-center gap-4 bg-[#5865F2] hover:bg-[#4752C4] text-white font-black py-5 rounded-2xl uppercase tracking-widest text-xs transition-all shadow-[0_10px_20px_rgba(88,101,242,0.2)] active:scale-95"
-        >
-          <LogIn size={18} />
-          Entrar com Discord
-        </button>
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl items-center px-6 py-12 lg:px-10">
+        <div className="grid w-full gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+          <section className="fade-up text-white">
+            <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 backdrop-blur">
+              <ShieldCheck size={16} className="text-[var(--brand)]" />
+              Acesso exclusivo da equipe AFL
+            </div>
+            <h1 className="max-w-xl text-5xl font-semibold tracking-tight text-white sm:text-6xl">
+              AFL <span className="text-[var(--brand)]">Painel</span>
+            </h1>
+            <p className="mt-5 max-w-lg text-base leading-7 text-white/65">
+              Controle vendas, comissões e aprovações em um ambiente limpo, organizado e feito para o dia a dia da operação.
+            </p>
+          </section>
+
+          <section className="fade-up surface rounded-[28px] p-8 sm:p-10">
+            <div className="brand-mark mb-6">
+              <span className="text-sm font-bold tracking-wide">AFL</span>
+            </div>
+            <h2 className="text-2xl font-semibold tracking-tight text-[var(--ink)]">Entrar no painel</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
+              Use sua conta Discord com cargo válido para continuar.
+            </p>
+
+            <button
+              onClick={() => signIn("discord", { callbackUrl: "/" })}
+              className="mt-8 flex w-full items-center justify-center gap-3 rounded-2xl bg-[#5865F2] px-5 py-4 text-sm font-semibold text-white transition hover:bg-[#4752C4] active:scale-[0.99]"
+            >
+              <LogIn size={18} />
+              Entrar com Discord
+            </button>
+
+            <p className="mt-6 text-center text-xs leading-5 text-[var(--ink-faint)]">
+              Sem cargo autorizado no servidor, o acesso será bloqueado automaticamente.
+            </p>
+          </section>
+        </div>
       </div>
     </div>
   );

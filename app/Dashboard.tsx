@@ -120,8 +120,10 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const [activeTab, setActiveTab] = useState('inicio');
   const [selectedRole, setSelectedRole] = useState('Todos');
   const isAdmin = Boolean(initialPermissions?.isAdmin);
+  const isMaster = Boolean(initialPermissions?.isMaster);
   const canPostSales = Boolean(initialPermissions?.canPostSales);
   const canApproveRecords = Boolean(initialPermissions?.canApproveRecords);
+  const roleLabel = isAdmin ? 'Administrador' : isMaster ? 'Master AFL' : 'Agente AFL';
   const [isLoading, setIsLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -672,7 +674,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
               activeTab={activeTab}
               displayUserName={displayUserName}
               displayUserAvatar={displayUserAvatar}
-              isAdmin={isAdmin}
+              roleLabel={roleLabel}
               onNavigate={mobileNavigate}
             />
           </aside>
@@ -689,7 +691,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
             activeTab={activeTab}
             displayUserName={displayUserName}
             displayUserAvatar={displayUserAvatar}
-            isAdmin={isAdmin}
+            roleLabel={roleLabel}
             onNavigate={(tab, extra) => {
               setActiveTab(tab);
               extra?.();
@@ -720,7 +722,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                 <div>
                   <p className="text-sm font-semibold">{displayUserName}</p>
                   <p className="text-xs" style={{ color: 'var(--ink-soft)' }}>
-                    {isAdmin ? 'Administrador' : 'Agente AFL'}
+                    {roleLabel}
                   </p>
                 </div>
               </div>
@@ -1478,14 +1480,14 @@ function SidebarContent({
   activeTab,
   displayUserName,
   displayUserAvatar,
-  isAdmin,
+  roleLabel,
   onNavigate,
 }: {
   navItems: Array<{ id: string; label: string; icon: React.ReactNode; badge?: number; onClick?: () => void }>;
   activeTab: string;
   displayUserName: string;
   displayUserAvatar: string;
-  isAdmin: boolean;
+  roleLabel: string;
   onNavigate: (tab: string, extra?: () => void) => void;
 }) {
   return (
@@ -1505,7 +1507,7 @@ function SidebarContent({
           <img src={displayUserAvatar} alt="" className="h-11 w-11 rounded-xl object-cover" />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{displayUserName}</p>
-            <p className="text-xs" style={{ color: 'var(--sidebar-muted)' }}>{isAdmin ? 'Administrador' : 'Agente AFL'}</p>
+            <p className="text-xs" style={{ color: 'var(--sidebar-muted)' }}>{roleLabel}</p>
           </div>
         </div>
 

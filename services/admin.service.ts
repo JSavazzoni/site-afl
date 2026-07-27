@@ -1,6 +1,5 @@
 import { RecordRepository } from '@/repositories/record.repository';
 import { MemberRepository } from '@/repositories/member.repository';
-import { prisma } from '@/lib/prisma';
 
 export class AdminService {
   private recordRepository: RecordRepository;
