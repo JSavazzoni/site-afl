@@ -14,7 +14,7 @@ export default function SiteFooter() {
       <p className="mt-0.5 text-[11px] leading-5">
         Desenvolvido por{" "}
         <span className="font-medium" style={{ color: "var(--brand-strong)" }}>
-          {"</>"} VZ
+          {"</>"} Vz
         </span>
       </p>
     </footer>
