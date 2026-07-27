@@ -1,5 +1,6 @@
 import { MemberRepository } from '@/repositories/member.repository';
 import { RecordRepository } from '@/repositories/record.repository';
+import { getCashbackPercentage } from '@/lib/roles';
 
 export class SpreadsheetService {
   private memberRepository: MemberRepository;
@@ -17,19 +18,9 @@ export class SpreadsheetService {
     const currentDate = new Date();
     const currentMonthString = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
 
-    const commissionRates: Record<string, number> = { 
-      'Resp.Vendas': 0.15, 
-      'Master AFL': 0.12, 
-      'Resp.AFL': 0.10, 
-      'Auxiliar AFL': 0.09, 
-      'Lider AFL': 0.08, 
-      'Sub-Lider AFL': 0.07, 
-      'Membro AFL': 0.06 
-    };
-
     const team = members.map(member => {
       const actualRole = member.role || 'Membro AFL';
-      const currentRate = commissionRates[actualRole] || 0.06;
+      const currentRate = getCashbackPercentage(actualRole);
 
       const currentMonthRecords = records.filter(r => 
         String(r.discordId) === String(member.discordId) && 

@@ -31,8 +31,7 @@ import {
   Menu,
 } from 'lucide-react';
 import { signOut } from "next-auth/react";
-
-const ROLES_HIERARCHY = ["Resp.Vendas", "Master AFL", "Resp.AFL", "Auxiliar AFL", "Lider AFL", "Sub-Lider AFL", "Membro AFL"];
+import { getCashbackPercentage, ROLES_HIERARCHY } from "@/lib/roles";
 
 const TAB_TITLES: Record<string, string> = {
   inicio: 'Visão geral',
@@ -89,14 +88,6 @@ const fetcher = async (url: string) => {
   return data;
 };
 
-const getCashbackPercentage = (role: string) => {
-  const rates: Record<string, number> = {
-    'Resp.Vendas': 0.15, 'Master AFL': 0.12, 'Resp.AFL': 0.10,
-    'Auxiliar AFL': 0.09, 'Lider AFL': 0.08, 'Sub-Lider AFL': 0.07, 'Membro AFL': 0.06
-  };
-  return rates[role || 'Membro AFL'] || 0.06;
-};
-
 const TooltipText = ({ text, maxWidth = "150px" }: { text: string, maxWidth?: string }) => (
   <div className="group relative inline-block max-w-full align-bottom">
     <span className="block truncate cursor-help" style={{ maxWidth }} title={text}>
@@ -123,7 +114,6 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const isMaster = Boolean(initialPermissions?.isMaster);
   const canPostSales = Boolean(initialPermissions?.canPostSales);
   const canApproveRecords = Boolean(initialPermissions?.canApproveRecords);
-  const roleLabel = isAdmin ? 'Administrador' : isMaster ? 'Master AFL' : 'Agente AFL';
   const [isLoading, setIsLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -191,6 +181,9 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const displayUserName = loggedInMember?.nome || loggedInMember?.name || userSession?.user?.name || 'Agente';
   const displayUserAvatar = loggedInMember?.avatar || userSession?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayUserName)}&background=EAB308&color=000&bold=true`;
   const canSelectAnySeller = isAdmin;
+  const roleLabel = isAdmin
+    ? 'Administrador'
+    : (loggedInMember?.panelRole || loggedInMember?.role || (isMaster ? 'Master AFL' : 'Agente AFL'));
 
   const dashboardMesAtual = useMemo(() => records.filter((r: any) =>
     (r.status === 'APROVADO' || r.status === 'ARQUIVADO') &&

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCashbackPercentage, ROLES_HIERARCHY } from '@/lib/roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,14 +27,6 @@ const isInstallmentPayment = (itemName: string) => {
   return (itemName || '').toUpperCase().includes('PAGAMENTO DE PARCELA');
 };
 
-const getCashbackPercentage = (role: string) => { 
-  const rates: Record<string, number> = { 
-    'Resp.Vendas': 0.15, 'Master AFL': 0.12, 'Resp.AFL': 0.10, 
-    'Auxiliar AFL': 0.09, 'Lider AFL': 0.08, 'Sub-Lider AFL': 0.07, 'Membro AFL': 0.06 
-  };
-  return rates[role || 'Membro AFL'] || 0.06;
-};
-
 export async function GET() {
   try {
     const members = await prisma.member.findMany();
@@ -46,7 +39,6 @@ export async function GET() {
 
     const currentDate = new Date();
     const currentMonthString = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-    const ROLES_HIERARCHY = ["Resp.Vendas", "Master AFL", "Resp.AFL", "Auxiliar AFL", "Lider AFL", "Sub-Lider AFL", "Membro AFL"];
 
     // 1. MONTANDO A GAVETA DA EQUIPE
     const team = members

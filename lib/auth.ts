@@ -2,30 +2,9 @@
 import { getServerSession, type NextAuthOptions } from "next-auth";
 import DiscordProvider from "next-auth/providers/discord";
 import { prisma } from "@/lib/prisma";
+import { resolveHighestRole } from "@/lib/roles";
 
-const ROLE_HIERARCHY = [
-  { id: process.env.ROLE_RESP_VENDAS, name: "Resp.Vendas" },
-  { id: process.env.ROLE_MASTER, name: "Master AFL" },
-  { id: process.env.ROLE_RESP_AFL, name: "Resp.AFL" },
-  { id: process.env.ROLE_AUXILIAR, name: "Auxiliar AFL" },
-  { id: process.env.ROLE_LIDER, name: "Lider AFL" },
-  { id: process.env.ROLE_SUB_LIDER, name: "Sub-Lider AFL" },
-  { id: process.env.ROLE_MEMBRO, name: "Membro AFL" },
-] as const;
-
-export function resolveHighestRole(discordRoles: string[] = []) {
-  for (const role of ROLE_HIERARCHY) {
-    if (role.id && discordRoles.includes(role.id)) {
-      return role.name;
-    }
-  }
-
-  return null;
-}
-
-export function getAllowedRoleIds() {
-  return ROLE_HIERARCHY.map((role) => role.id).filter(Boolean) as string[];
-}
+export { resolveHighestRole, getAllowedRoleIds } from "@/lib/roles";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -60,20 +39,22 @@ export const authOptions: NextAuthOptions = {
             token.picture = avatarUrl;
             token.name = member.nick || member.user.global_name || member.user.username || "Agente";
 
+            const resolvedRole = resolveHighestRole(member.roles) || "Membro AFL";
+
             await prisma.member.upsert({
               where: { discordId: String(token.id) },
               update: {
                 avatar: token.picture as string | undefined,
                 name: token.name as string,
-                role: resolveHighestRole(member.roles) || "Membro AFL",
-                panelRole: resolveHighestRole(member.roles) || "Membro AFL",
+                role: resolvedRole,
+                panelRole: resolvedRole,
               },
               create: {
                 discordId: String(token.id),
                 name: token.name as string,
                 avatar: token.picture as string | undefined,
-                role: resolveHighestRole(member.roles) || "Membro AFL",
-                panelRole: resolveHighestRole(member.roles) || "Membro AFL",
+                role: resolvedRole,
+                panelRole: resolvedRole,
               },
             });
           }
