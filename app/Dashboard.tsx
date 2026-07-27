@@ -115,7 +115,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const isAdmin = Boolean(initialPermissions?.isAdmin);
   const isMaster = Boolean(initialPermissions?.isMaster);
   const canPostSales = Boolean(initialPermissions?.canPostSales);
-  const canPostExtras = Boolean(initialPermissions?.canPostExtras ?? (initialPermissions?.isAdmin || initialPermissions?.isMaster));
+  const canPostExtras = Boolean(initialPermissions?.canPostExtras);
   const canApproveRecords = Boolean(initialPermissions?.canApproveRecords);
   const [isLoading, setIsLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);

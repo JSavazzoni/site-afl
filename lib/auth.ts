@@ -6,6 +6,7 @@ import {
   hasPanelAccess,
   isActivePanelRole,
   resolveHighestRole,
+  ROLE_NAMES,
 } from "@/lib/roles";
 
 export { resolveHighestRole, getAllowedRoleIds, hasPanelAccess } from "@/lib/roles";
@@ -108,30 +109,41 @@ export async function getCurrentAccess() {
 
   let highestRole = resolveHighestRole(userRoles);
   let isPanelMember = hasPanelAccess(userRoles);
+  let dbPanelRole: string | null = null;
 
-  // Fallback: se o JWT não trouxe roles (token expirado / falha Discord),
-  // libera quem já está ativo no banco com cargo válido.
-  if (session && !isPanelMember && discordId) {
+  // Confere cargo no banco (JWT sem roles, env de role incompleto, etc.)
+  if (session && discordId) {
     const dbMember = await prisma.member.findUnique({
       where: { discordId },
     });
 
-    if (dbMember && isActivePanelRole(dbMember.panelRole || dbMember.role)) {
-      highestRole = dbMember.panelRole || dbMember.role;
-      isPanelMember = true;
+    if (dbMember) {
+      dbPanelRole = dbMember.panelRole || dbMember.role || null;
+      if (!isPanelMember && isActivePanelRole(dbPanelRole)) {
+        highestRole = dbPanelRole;
+        isPanelMember = true;
+      }
     }
   }
+
+  const effectiveRole =
+    highestRole || (isActivePanelRole(dbPanelRole) ? dbPanelRole : null);
 
   const adminRoleId = process.env.DISCORD_ADMIN_ROLE_ID || "";
   const masterRoleId = process.env.ROLE_MASTER || "";
 
-  const isAdmin = Boolean(adminRoleId && userRoles.includes(String(adminRoleId)));
-  const isMaster = Boolean(masterRoleId && userRoles.includes(String(masterRoleId)));
+  const isAdmin =
+    Boolean(adminRoleId && userRoles.includes(String(adminRoleId))) ||
+    effectiveRole === ROLE_NAMES.ADM;
+
+  const isMaster =
+    Boolean(masterRoleId && userRoles.includes(String(masterRoleId))) ||
+    effectiveRole === ROLE_NAMES.MASTER;
 
   return {
     session,
     userRoles,
-    highestRole,
+    highestRole: effectiveRole,
     isPanelMember,
     isAdmin,
     isMaster,

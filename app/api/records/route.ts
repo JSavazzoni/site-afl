@@ -31,12 +31,11 @@ export async function POST(req: Request) {
     const body = await req.json();
     const recordType = body?.tipo || 'VENDA';
 
-    if (recordType !== 'VENDA' && !access.isAdmin && !access.isMaster) {
+    if (recordType !== 'VENDA' && !access.canPostExtras) {
       return NextResponse.json({ error: 'Somente Master/Admin podem criar este tipo de registro.' }, { status: 403 });
     }
 
-    const canPostExtras = access.isAdmin || access.isMaster;
-    const safePayload = canPostExtras
+    const safePayload = access.canPostExtras
       ? body
       : {
           ...body,
