@@ -5,14 +5,46 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import useSWR from 'swr';
-import { 
-  LayoutDashboard, Trophy, PlusCircle, ShieldCheck, TrendingUp, Users, 
-  LogOut, UsersRound, X, History, CheckCircle2, Database, Clock, 
-  ShoppingCart, Zap, Banknote, AlertCircle, Trash2, ShieldAlert, Archive, Search, ChevronDown, AlertTriangle
+import {
+  LayoutDashboard,
+  Trophy,
+  PlusCircle,
+  ShieldCheck,
+  TrendingUp,
+  Users,
+  LogOut,
+  UsersRound,
+  X,
+  History,
+  CheckCircle2,
+  Database,
+  Clock,
+  ShoppingCart,
+  Zap,
+  Banknote,
+  Trash2,
+  ShieldAlert,
+  Archive,
+  Search,
+  ChevronDown,
+  AlertTriangle,
+  Menu,
 } from 'lucide-react';
 import { signOut } from "next-auth/react";
 
 const ROLES_HIERARCHY = ["Resp.Vendas", "Master AFL", "Resp.AFL", "Auxiliar AFL", "Lider AFL", "Sub-Lider AFL", "Membro AFL"];
+
+const TAB_TITLES: Record<string, string> = {
+  inicio: 'Visão geral',
+  ranking: 'Ranking',
+  equipe: 'Efetivo',
+  gestao: 'Mural',
+  registrar: 'Postar',
+  pendencias: 'Pendências',
+  admin: 'Aprovações',
+  admin_zone: 'Administração',
+  historico_backup: 'Histórico',
+};
 
 const formatCurrency = (value: number | string) => {
   return Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -57,20 +89,28 @@ const fetcher = async (url: string) => {
   return data;
 };
 
-const getCashbackPercentage = (role: string) => { 
-  const rates: Record<string, number> = { 
-    'Resp.Vendas': 0.15, 'Master AFL': 0.12, 'Resp.AFL': 0.10, 
-    'Auxiliar AFL': 0.09, 'Lider AFL': 0.08, 'Sub-Lider AFL': 0.07, 'Membro AFL': 0.06 
+const getCashbackPercentage = (role: string) => {
+  const rates: Record<string, number> = {
+    'Resp.Vendas': 0.15, 'Master AFL': 0.12, 'Resp.AFL': 0.10,
+    'Auxiliar AFL': 0.09, 'Lider AFL': 0.08, 'Sub-Lider AFL': 0.07, 'Membro AFL': 0.06
   };
   return rates[role || 'Membro AFL'] || 0.06;
 };
 
 const TooltipText = ({ text, maxWidth = "150px" }: { text: string, maxWidth?: string }) => (
-  <div className="group relative inline-block align-bottom max-w-full">
-    <span className="truncate block cursor-pointer" style={{ maxWidth }} title={text}>
+  <div className="group relative inline-block max-w-full align-bottom">
+    <span className="block truncate cursor-help" style={{ maxWidth }} title={text}>
       {text}
     </span>
-    <div className="opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 absolute left-4 top-full mt-2 w-max max-w-[260px] bg-[#111] text-yellow-400 text-[10px] font-black px-4 py-3 rounded-xl border border-yellow-400/30 shadow-[0_20px_50px_rgba(0,0,0,1)] z-[99999] whitespace-normal leading-relaxed uppercase tracking-widest text-left pointer-events-none">
+    <div
+      className="pointer-events-none invisible absolute left-0 top-full z-[99999] mt-2 w-max max-w-[280px] rounded-2xl border px-3 py-2 text-xs opacity-0 shadow-lg transition-all duration-200 group-hover:visible group-hover:opacity-100"
+      style={{
+        background: 'var(--bg-elevated)',
+        color: 'var(--ink)',
+        borderColor: 'var(--line)',
+        boxShadow: 'var(--shadow-md)',
+      }}
+    >
       {text}
     </div>
   </div>
@@ -84,14 +124,15 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const canApproveRecords = Boolean(initialPermissions?.canApproveRecords);
   const [isLoading, setIsLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   const [muralSearchQuery, setMuralSearchQuery] = useState('');
   const [muralPaginationLimit, setMuralPaginationLimit] = useState(20);
   const [logSearchQuery, setLogSearchQuery] = useState('');
   const [logPaginationLimit, setLogPaginationLimit] = useState(20);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [historyPaginationLimit, setHistoryPaginationLimit] = useState(20);
-  
+
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [installmentModalData, setInstallmentModalData] = useState<any>(null);
   const [confirmationModalData, setConfirmationModalData] = useState<{ aberto: boolean; titulo: string; mensagem: string; acao: () => void; tipo?: 'perigo' | 'aviso'; } | null>(null);
@@ -99,15 +140,15 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const [installmentValue, setInstallmentValue] = useState('');
   const [nextDueDate, setNextDueDate] = useState('');
   const [backupMonth, setBackupMonth] = useState('');
-  
-  const [formData, setFormData] = useState({ 
-    type: 'VENDA', vendorId: '', client: '', item: '', 
-    amount: '', receivedAmount: '', recruitedId: '', dueDate: '', memberWithdrawalId: '' 
+
+  const [formData, setFormData] = useState({
+    type: 'VENDA', vendorId: '', client: '', item: '',
+    amount: '', receivedAmount: '', recruitedId: '', dueDate: '', memberWithdrawalId: ''
   });
 
-  const displayToast = (msg: string) => { 
-    setToastMessage(msg); 
-    setTimeout(() => setToastMessage(null), 3000); 
+  const displayToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
   };
 
   const currentDate = new Date();
@@ -121,7 +162,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const records = Array.isArray(recordsData) ? recordsData : [];
   const isInitialLoad = (!teamData && !recordsData);
 
-  const forceDataSync = useCallback(async () => { 
+  const forceDataSync = useCallback(async () => {
     await Promise.all([mutateTeam(), mutateRecords()]);
   }, [mutateTeam, mutateRecords]);
 
@@ -149,8 +190,8 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const displayUserAvatar = loggedInMember?.avatar || userSession?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayUserName)}&background=EAB308&color=000&bold=true`;
   const canSelectAnySeller = isAdmin;
 
-  const dashboardMesAtual = useMemo(() => records.filter((r: any) => 
-    (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
+  const dashboardMesAtual = useMemo(() => records.filter((r: any) =>
+    (r.status === 'APROVADO' || r.status === 'ARQUIVADO') &&
     (r.createdAt || r.criado_em)?.startsWith(currentMonthString)
   ), [records, currentMonthString]);
 
@@ -162,7 +203,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
     const netSales = dashboardMesAtual
       .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !isInstallmentPayment(r.item))
       .reduce((acc: number, r: any) => acc + getNetValue(r), 0);
-      
+
     const netInstallments = dashboardMesAtual
       .filter((r: any) => isInstallmentPayment(r.item))
       .reduce((acc: number, r: any) => acc + (getGrossValue(r) || getNetValue(r) || getBonusValue(r)), 0);
@@ -171,8 +212,8 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   }, [dashboardMesAtual]);
 
   const backupStats = useMemo(() => {
-    const backupMonthRecords = records.filter((r: any) => 
-      (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
+    const backupMonthRecords = records.filter((r: any) =>
+      (r.status === 'APROVADO' || r.status === 'ARQUIVADO') &&
       (r.createdAt || r.criado_em)?.startsWith(backupMonth)
     );
 
@@ -183,7 +224,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
     const netSales = backupMonthRecords
       .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !isInstallmentPayment(r.item))
       .reduce((acc: number, r: any) => acc + getNetValue(r), 0);
-      
+
     const netInstallments = backupMonthRecords
       .filter((r: any) => isInstallmentPayment(r.item))
       .reduce((acc: number, r: any) => acc + (getGrossValue(r) || getNetValue(r) || getBonusValue(r)), 0);
@@ -198,36 +239,36 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
       const actualRole = member.panelRole || member.cargoPainel || member.role || member.cargo || 'Membro AFL';
       const commissionRate = getCashbackPercentage(actualRole);
 
-      const currentMonthRecords = records.filter((r: any) => 
-        String(r.discordId) === String(member.discordId) && 
-        (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
+      const currentMonthRecords = records.filter((r: any) =>
+        String(r.discordId) === String(member.discordId) &&
+        (r.status === 'APROVADO' || r.status === 'ARQUIVADO') &&
         (r.createdAt || r.criado_em)?.startsWith(currentMonthString)
       );
-      
+
       const grossSales = currentMonthRecords
         .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !(r.item || '').toUpperCase().includes('DÍVIDA ANTIGA') && !isInstallmentPayment(r.item))
         .reduce((acc: number, r: any) => acc + getGrossValue(r), 0);
-      
+
       const netSales = currentMonthRecords
         .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !isInstallmentPayment(r.item))
         .reduce((acc: number, r: any) => acc + getNetValue(r), 0);
-      
+
       const netInstallments = currentMonthRecords
         .filter((r: any) => isInstallmentPayment(r.item))
         .reduce((acc: number, r: any) => acc + (getGrossValue(r) || getNetValue(r) || getBonusValue(r)), 0);
-      
+
       const totalNet = netSales + netInstallments;
 
       const bonusEarned = currentMonthRecords
         .filter((r: any) => (r.type === 'CORRIDINHA' || r.tipo === 'CORRIDINHA') && !(r.item || '').toUpperCase().includes('SALDO RETIDO'))
         .reduce((acc: number, r: any) => acc + getBonusValue(r), 0);
-      
+
       const amountPaid = currentMonthRecords
         .filter((r: any) => (r.type === 'SAQUE' || r.tipo === 'SAQUE') && !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA'))
         .reduce((acc: number, r: any) => acc + getPaidValue(r), 0);
 
       const activeRecords = records.filter((r: any) => String(r.discordId) === String(member.discordId) && r.status === 'APROVADO');
-      
+
       const activeNetSales = activeRecords
         .filter((r: any) => (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && !isInstallmentPayment(r.item))
         .reduce((acc: number, r: any) => acc + getNetValue(r), 0);
@@ -235,27 +276,27 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
       const activeNetInstallments = activeRecords
         .filter((r: any) => isInstallmentPayment(r.item))
         .reduce((acc: number, r: any) => acc + (getGrossValue(r) || getNetValue(r) || getBonusValue(r)), 0);
-      
+
       const activeNet = activeNetSales + activeNetInstallments;
-      
+
       const activeBonus = activeRecords
         .filter((r: any) => (r.type === 'CORRIDINHA' || r.tipo === 'CORRIDINHA'))
         .reduce((acc: number, r: any) => acc + getBonusValue(r), 0);
-      
+
       const activePaid = activeRecords
         .filter((r: any) => (r.type === 'SAQUE' || r.tipo === 'SAQUE'))
         .reduce((acc: number, r: any) => acc + getPaidValue(r), 0);
-      
+
       const finalBalance = (activeNet * commissionRate) + activeBonus - activePaid;
 
-      return { 
-        ...member, 
-        actualRole, 
-        grossSales, 
-        totalNet, 
-        bonusEarned, 
-        amountPaid, 
-        finalBalance 
+      return {
+        ...member,
+        actualRole,
+        grossSales,
+        totalNet,
+        bonusEarned,
+        amountPaid,
+        finalBalance
       };
     }).sort((a: any, b: any) => b.grossSales - a.grossSales);
   }, [teamMembers, records, currentMonthString]);
@@ -277,18 +318,18 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
       .filter((r: any) => (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.type === 'VENDA' || r.tipo === 'VENDA' || (!r.type && !r.tipo)) && getNetValue(r) < getGrossValue(r))
       .sort((a: any, b: any) => String(a.dueDate || a.dataVencimento || '9999').localeCompare(String(b.dueDate || b.dataVencimento || '9999')));
   }, [records]);
-  
+
   const filteredMural = useMemo(() => {
-    return records.filter((r: any) => 
-      (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
-      (r.createdAt || r.criado_em)?.startsWith(currentMonthString) && 
-      !(r.item || '').toUpperCase().includes('SALDO RETIDO') && 
+    return records.filter((r: any) =>
+      (r.status === 'APROVADO' || r.status === 'ARQUIVADO') &&
+      (r.createdAt || r.criado_em)?.startsWith(currentMonthString) &&
+      !(r.item || '').toUpperCase().includes('SALDO RETIDO') &&
       !(r.item || '').toUpperCase().includes('DÍVIDA RETIDA')
     ).filter((r: any) => {
       if (muralSearchQuery === '') return true;
       const term = muralSearchQuery.toLowerCase();
-      return getDisplayClientName(r).toLowerCase().includes(term) || 
-             getDisplayItemName(r).toLowerCase().includes(term) || 
+      return getDisplayClientName(r).toLowerCase().includes(term) ||
+             getDisplayItemName(r).toLowerCase().includes(term) ||
              (r.name || r.nome || '').toLowerCase().includes(term);
     }).sort((a: any, b: any) => new Date(b.createdAt || b.criado_em).getTime() - new Date(a.createdAt || a.criado_em).getTime());
   }, [records, currentMonthString, muralSearchQuery]);
@@ -297,8 +338,8 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
     return records.filter((r: any) => r.status === 'APROVADO').filter((r: any) => {
       if (logSearchQuery === '') return true;
       const term = logSearchQuery.toLowerCase();
-      return (r.name || r.nome || '').toLowerCase().includes(term) || 
-             (r.item || '').toLowerCase().includes(term) || 
+      return (r.name || r.nome || '').toLowerCase().includes(term) ||
+             (r.item || '').toLowerCase().includes(term) ||
              (r.type || r.tipo || '').toLowerCase().includes(term);
     }).sort((a: any, b: any) => new Date(b.createdAt || b.criado_em).getTime() - new Date(a.createdAt || a.criado_em).getTime());
   }, [records, logSearchQuery]);
@@ -311,8 +352,8 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
     return records.filter((r: any) => (r.createdAt || r.criado_em)?.startsWith(backupMonth)).filter((r: any) => {
       if (historySearchQuery === '') return true;
       const term = historySearchQuery.toLowerCase();
-      return (r.name || r.nome || '').toLowerCase().includes(term) || 
-             (r.item || '').toLowerCase().includes(term) || 
+      return (r.name || r.nome || '').toLowerCase().includes(term) ||
+             (r.item || '').toLowerCase().includes(term) ||
              (r.type || r.tipo || '').toLowerCase().includes(term);
     }).sort((a: any, b: any) => new Date(b.createdAt || b.criado_em).getTime() - new Date(a.createdAt || a.criado_em).getTime());
   }, [records, backupMonth, historySearchQuery]);
@@ -327,7 +368,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
 
   const parsedTotalValue = parseFloat(formData.amount.replace(',', '.')) || 0;
   const parsedReceivedValue = formData.receivedAmount !== '' ? parseFloat(formData.receivedAmount.replace(',', '.')) : parsedTotalValue;
-  const requireDueDate = parsedReceivedValue < parsedTotalValue; 
+  const requireDueDate = parsedReceivedValue < parsedTotalValue;
 
   useEffect(() => {
     if (!canPostSales) return;
@@ -350,7 +391,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
 
     const responsibleMember = activeTeam.find((m: any) => String(m.discordId) === String(formData.vendorId || formData.recruitedId || formData.memberWithdrawalId));
 
-    const payload = { 
+    const payload = {
       tipo: formData.type,
       vendedorId: formData.vendorId,
       recrutadoId: formData.recruitedId,
@@ -362,14 +403,14 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
       recebidoNumerico: formData.type === 'CORRIDINHA' ? 0 : parsedReceivedValue,
       cashbackExtra: formData.type === 'CORRIDINHA' ? parsedTotalValue : 0,
       dataVencimento: formData.dueDate,
-      criadoPor: displayUserName 
+      criadoPor: displayUserName
     };
 
     try {
-      const response = await fetch('/api/records', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify(payload) 
+      const response = await fetch('/api/records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
 
       const result = await response.json();
@@ -401,18 +442,18 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   const handleApprovalDecision = async (id: string, action: 'APROVAR' | 'REPROVAR') => {
     if (isLoading) return;
     setIsLoading(true);
-    
+
     try {
-      const response = await fetch('/api/records/evaluate', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ recordId: id, action: action, evaluatedBy: displayUserName }) 
+      const response = await fetch('/api/records/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recordId: id, action: action, evaluatedBy: displayUserName })
       });
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result?.error || 'Falha ao avaliar registro.');
       }
-      await forceDataSync(); 
+      await forceDataSync();
       displayToast(action === 'APROVAR' ? 'REGISTRO APROVADO!' : 'REGISTRO REPROVADO!');
     } catch (error: any) {
       displayToast(error?.message || 'Falha ao avaliar registro.');
@@ -422,90 +463,90 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
   };
 
   const executeDeleteLog = async (id: string) => {
-    setIsLoading(true); 
+    setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/logs', { 
-        method: 'DELETE', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ id }) 
-      }); 
+      const response = await fetch('/api/admin/logs', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result?.error || 'Falha ao excluir registro.');
       }
-      await forceDataSync(); 
-      setConfirmationModalData(null); 
+      await forceDataSync();
+      setConfirmationModalData(null);
       displayToast('REGISTRO EXCLUÍDO!');
     } catch (error: any) {
       displayToast(error?.message || 'Falha ao excluir registro.');
     } finally {
-      setIsLoading(false); 
+      setIsLoading(false);
     }
   };
 
   const handleDeleteLogRequest = (id: string) => {
-    setConfirmationModalData({ 
-      aberto: true, 
-      titulo: 'EXCLUIR REGISTRO', 
-      mensagem: 'Tem certeza que deseja deletar este log permanentemente?', 
-      tipo: 'perigo', 
-      acao: () => executeDeleteLog(id) 
+    setConfirmationModalData({
+      aberto: true,
+      titulo: 'EXCLUIR REGISTRO',
+      mensagem: 'Tem certeza que deseja deletar este log permanentemente?',
+      tipo: 'perigo',
+      acao: () => executeDeleteLog(id)
     });
   };
 
   const executeMonthRollover = async () => {
-    setIsLoading(true); 
+    setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/rollover', { method: 'POST' }); 
+      const response = await fetch('/api/admin/rollover', { method: 'POST' });
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result?.error || 'Falha ao executar virada.');
       }
-      displayToast("MÊS FECHADO!"); 
-      await forceDataSync(); 
-      setConfirmationModalData(null); 
+      displayToast("MÊS FECHADO!");
+      await forceDataSync();
+      setConfirmationModalData(null);
     } catch (error: any) {
       displayToast(error?.message || 'Falha ao executar virada.');
     } finally {
-      setIsLoading(false); 
+      setIsLoading(false);
     }
   };
 
   const handleMonthRolloverRequest = () => {
-    setConfirmationModalData({ 
-      aberto: true, 
-      titulo: 'VIRADA DE MÊS', 
-      mensagem: 'ALERTA MÁXIMO: Isso irá arquivar o mês atual e zerar todos os contadores da equipe. Tem certeza que deseja prosseguir?', 
-      tipo: 'perigo', 
-      acao: executeMonthRollover 
+    setConfirmationModalData({
+      aberto: true,
+      titulo: 'VIRADA DE MÊS',
+      mensagem: 'ALERTA MÁXIMO: Isso irá arquivar o mês atual e zerar todos os contadores da equipe. Tem certeza que deseja prosseguir?',
+      tipo: 'perigo',
+      acao: executeMonthRollover
     });
   };
 
   const executeSystemRestore = async () => {
-    setIsLoading(true); 
+    setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/audit'); 
+      const response = await fetch('/api/admin/audit');
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result?.error || 'Falha ao restaurar sistema.');
       }
-      displayToast("SISTEMA RESTAURADO!"); 
-      await forceDataSync(); 
-      setConfirmationModalData(null); 
+      displayToast("SISTEMA RESTAURADO!");
+      await forceDataSync();
+      setConfirmationModalData(null);
     } catch (error: any) {
       displayToast(error?.message || 'Falha ao restaurar sistema.');
     } finally {
-      setIsLoading(false); 
+      setIsLoading(false);
     }
   };
 
   const handleSystemRestoreRequest = () => {
-    setConfirmationModalData({ 
-      aberto: true, 
-      titulo: 'RESTAURAR SISTEMA', 
-      mensagem: 'Tem certeza que deseja recalcular o banco de dados e voltar as vendas arquivadas para o Painel Principal?', 
-      tipo: 'aviso', 
-      acao: executeSystemRestore 
+    setConfirmationModalData({
+      aberto: true,
+      titulo: 'RESTAURAR SISTEMA',
+      mensagem: 'Tem certeza que deseja recalcular o banco de dados e voltar as vendas arquivadas para o Painel Principal?',
+      tipo: 'aviso',
+      acao: executeSystemRestore
     });
   };
 
@@ -513,21 +554,21 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
     e.preventDefault();
     if (isLoading || !installmentModalData) return;
     setIsLoading(true);
-    
+
     const parsedPayment = parseFloat(installmentValue.replace(',', '.')) || 0;
-    
+
     try {
-      const response = await fetch('/api/records/installment', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ recordId: installmentModalData.id, paidAmount: parsedPayment, nextDueDate: nextDueDate }) 
+      const response = await fetch('/api/records/installment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recordId: installmentModalData.id, paidAmount: parsedPayment, nextDueDate: nextDueDate })
       });
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result?.error || 'Falha ao registrar pagamento.');
       }
-      setInstallmentModalData(null); 
-      setInstallmentValue(''); 
+      setInstallmentModalData(null);
+      setInstallmentValue('');
       await forceDataSync();
       displayToast('PAGAMENTO REGISTRADO!');
     } catch (error: any) {
@@ -537,626 +578,979 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
     }
   };
 
+  const mobileNavigate = (tab: string, onNavigate?: () => void) => {
+    setActiveTab(tab);
+    setIsSidebarOpen(false);
+    onNavigate?.();
+  };
+
+  const navItems = [
+    { id: 'inicio', label: 'Visão geral', icon: <LayoutDashboard size={18} /> },
+    { id: 'ranking', label: 'Ranking', icon: <Trophy size={18} /> },
+    { id: 'equipe', label: 'Efetivo', icon: <Users size={18} /> },
+    { id: 'gestao', label: 'Mural', icon: <History size={18} />, onClick: () => setMuralPaginationLimit(20) },
+    ...(canPostSales ? [{ id: 'registrar', label: 'Postar', icon: <PlusCircle size={18} /> }] : []),
+    ...(isAdmin ? [{ id: 'pendencias', label: 'Pendências', icon: <Clock size={18} />, badge: pendingInstallments.length }] : []),
+    ...(canApproveRecords ? [{ id: 'admin', label: 'Aprovações', icon: <ShieldCheck size={18} />, badge: pendingRecords.length }] : []),
+    ...(isAdmin ? [
+      { id: 'admin_zone', label: 'Administração', icon: <ShieldAlert size={18} />, onClick: () => setLogPaginationLimit(20) },
+      { id: 'historico_backup', label: 'Histórico', icon: <Archive size={18} />, onClick: () => setHistoryPaginationLimit(20) },
+    ] : []),
+  ];
+
   return (
-    <div className="flex min-h-screen bg-[#050505] text-white font-sans selection:bg-yellow-400 overflow-hidden">
-      <style dangerouslySetInnerHTML={{__html: `html, body, * { scrollbar-width: thin !important; scrollbar-color: #3f3f46 transparent !important; } ::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: #facc15; }` }} />
-      
+    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            html, body, * { scrollbar-width: thin !important; scrollbar-color: rgba(0,0,0,.18) transparent !important; }
+            ::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+            ::-webkit-scrollbar-track { background: transparent; }
+            ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.18); border-radius: 999px; }
+            ::-webkit-scrollbar-thumb:hover { background: #c89b0c; }
+          `,
+        }}
+      />
+
       {toastMessage && (
-        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-10">
-          <div className="bg-yellow-400 text-black px-8 py-4 rounded-2xl font-black shadow-2xl flex items-center gap-3 text-xs uppercase tracking-widest italic border-4 border-black/10">
-            <CheckCircle2 size={20} /> {toastMessage}
+        <div className="fixed left-1/2 top-5 z-[140] -translate-x-1/2 px-4 toast-enter">
+          <div
+            className="flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold"
+            style={{
+              background: 'var(--bg-elevated)',
+              color: 'var(--ink)',
+              borderColor: 'var(--line)',
+              boxShadow: 'var(--shadow-md)',
+            }}
+          >
+            <span
+              className="flex h-9 w-9 items-center justify-center rounded-xl"
+              style={{ background: 'var(--brand-soft)', color: 'var(--brand-strong)' }}
+            >
+              <CheckCircle2 size={18} />
+            </span>
+            <span>{toastMessage}</span>
           </div>
         </div>
       )}
-      
-      <aside className="w-72 border-r border-white/5 bg-[#0a0a0a] p-8 flex flex-col z-50">
-        <div className="flex items-center gap-4 mb-10 font-black italic text-2xl uppercase tracking-tighter">
-          <div className="p-2.5 bg-yellow-400 rounded-xl text-black shadow-[0_0_25px_#facc15]">
-            <UsersRound size={24}/>
-          </div>
-          AFL<span className="text-yellow-400 ml-1">PAINEL</span>
-        </div>
-        
-        <nav className="flex-1 space-y-2">
-          <NavItem label="DASHBOARD" icon={<LayoutDashboard size={18}/>} active={activeTab === 'inicio'} onClick={() => setActiveTab('inicio')} />
-          <NavItem label="RANKING" icon={<Trophy size={18}/>} active={activeTab === 'ranking'} onClick={() => setActiveTab('ranking')} />
-          <NavItem label="EFETIVO" icon={<Users size={18}/>} active={activeTab === 'equipe'} onClick={() => setActiveTab('equipe')} />
-          <NavItem label="MURAL" icon={<History size={18}/>} active={activeTab === 'gestao'} onClick={() => { setActiveTab('gestao'); setMuralPaginationLimit(20); }} />
-          
-          {(canPostSales || canApproveRecords || isAdmin) && (
-            <div className="pt-6 mt-6 border-t border-white/5 space-y-2">
-              {canPostSales && (
-                <NavItem label="POSTAR" icon={<PlusCircle size={18}/>} active={activeTab === 'registrar'} onClick={() => setActiveTab('registrar')} color="text-yellow-400" />
-              )}
-              
-              {isAdmin && (
-                <button onClick={() => setActiveTab('pendencias')} className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all ${activeTab === 'pendencias' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
-                  <div className="flex items-center gap-4"><Clock size={18}/> <span className="font-black text-[11px] tracking-widest uppercase">PENDÊNCIAS</span></div>
-                  {pendingInstallments.length > 0 && <span className="bg-red-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-lg shadow-red-600/40 animate-pulse">{pendingInstallments.length}</span>}
-                </button>
-              )}
-              
-              {canApproveRecords && (
-                <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all ${activeTab === 'admin' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
-                  <div className="flex items-center gap-4"><ShieldCheck size={18}/> <span className="font-black text-[11px] tracking-widest uppercase text-yellow-400">APROVAÇÕES</span></div>
-                  {pendingRecords.length > 0 && <span className="bg-yellow-400 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-lg shadow-yellow-400/20">{pendingRecords.length}</span>}
-                </button>
-              )}
-              
-              {isAdmin && (
-                <>
-                  <NavItem label="ADMINISTRAÇÃO" icon={<ShieldAlert size={18}/>} active={activeTab === 'admin_zone'} onClick={() => { setActiveTab('admin_zone'); setLogPaginationLimit(20); }} color="text-red-500" />
-                  <NavItem label="HISTÓRICO" icon={<Archive size={18}/>} active={activeTab === 'historico_backup'} onClick={() => { setActiveTab('historico_backup'); setHistoryPaginationLimit(20); }} color="text-zinc-400" />
-                </>
-              )}
-            </div>
-          )}
-        </nav>
-        
-        <button onClick={() => signOut()} className="p-5 mt-6 text-zinc-600 font-black text-[11px] uppercase hover:text-red-500 border border-white/5 bg-black rounded-2xl flex justify-center gap-3 w-full transition-all group hover:bg-white/5">
-          <LogOut size={16} className="group-hover:-translate-x-1 transition-transform"/> DESCONECTAR
-        </button>
-      </aside>
 
-      <main className="flex-1 overflow-y-auto bg-[#050505] relative flex flex-col">
-        <div className="p-10 lg:p-14 flex-1">
-            <header className="mb-14 flex justify-between items-end border-b border-white/5 pb-8">
-               <div>
-                 <h2 className="text-4xl lg:text-5xl font-black uppercase italic tracking-tighter leading-none text-white">
-                   {activeTab === 'inicio' ? "VISÃO GERAL" : activeTab === 'admin_zone' ? "ZONA ADMIN" : activeTab.replace('_', ' ')}
-                 </h2>
-                 <div className="h-1.5 w-24 bg-yellow-400 mt-6 shadow-[0_0_20px_#facc15]"></div>
-               </div>
-               <div className="flex items-center gap-4 bg-[#0a0a0a] p-3 pl-5 rounded-[1.5rem] border border-white/5 shadow-md">
-                 <div className="text-right">
-                   <p className="text-xs font-black uppercase italic text-white tracking-tight">{displayUserName}</p>
-                   <p className="text-[9px] font-bold text-yellow-400 uppercase tracking-[0.2em] mt-1 opacity-80">{isAdmin ? 'ADMINISTRADOR' : 'AGENTE AFL'}</p>
-                 </div>
-                 <img src={displayUserAvatar} className="w-12 h-12 rounded-[1rem] border-2 border-yellow-400/30 shadow-md" alt="" />
-               </div>
+      <div className="lg:hidden sticky top-0 z-40 border-b backdrop-blur">
+        <div
+          className="flex items-center justify-between px-4 py-3"
+          style={{ background: 'rgba(255,255,255,0.92)', borderColor: 'var(--line)' }}
+        >
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-xl border transition-colors hover:opacity-90"
+            style={{ borderColor: 'var(--line)', background: 'var(--bg-elevated)' }}
+          >
+            <Menu size={20} />
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="brand-mark flex h-10 w-10 items-center justify-center rounded-xl text-black">
+              <UsersRound size={18} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">AFL Painel</p>
+              <p className="text-xs" style={{ color: 'var(--ink-soft)' }}>Gestão interna</p>
+            </div>
+          </div>
+          <img src={displayUserAvatar} alt="" className="h-10 w-10 rounded-xl object-cover" />
+        </div>
+      </div>
+
+      {isSidebarOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 lg:hidden" onClick={() => setIsSidebarOpen(false)}>
+          <aside
+            className="h-full w-[88vw] max-w-[320px] p-5"
+            style={{ background: 'var(--sidebar)', color: 'var(--sidebar-ink)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <SidebarContent
+              navItems={navItems}
+              activeTab={activeTab}
+              displayUserName={displayUserName}
+              displayUserAvatar={displayUserAvatar}
+              isAdmin={isAdmin}
+              onNavigate={mobileNavigate}
+            />
+          </aside>
+        </div>
+      )}
+
+      <div className="flex min-h-screen">
+        <aside
+          className="hidden lg:flex lg:w-72 lg:flex-col lg:justify-between lg:border-r lg:p-6"
+          style={{ background: 'var(--sidebar)', color: 'var(--sidebar-ink)', borderColor: 'rgba(255,255,255,0.08)' }}
+        >
+          <SidebarContent
+            navItems={navItems}
+            activeTab={activeTab}
+            displayUserName={displayUserName}
+            displayUserAvatar={displayUserAvatar}
+            isAdmin={isAdmin}
+            onNavigate={(tab, extra) => {
+              setActiveTab(tab);
+              extra?.();
+            }}
+          />
+        </aside>
+
+        <main className="flex-1">
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+            <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between fade-up">
+              <div>
+                <p className="mb-2 text-sm font-medium" style={{ color: 'var(--ink-soft)' }}>
+                  AFL Painel
+                </p>
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                  {TAB_TITLES[activeTab] || 'Painel'}
+                </h1>
+              </div>
+              <div
+                className="inline-flex items-center gap-3 rounded-2xl border px-3 py-3"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  borderColor: 'var(--line)',
+                  boxShadow: 'var(--shadow-md)',
+                }}
+              >
+                <img src={displayUserAvatar} alt="" className="h-11 w-11 rounded-xl object-cover" />
+                <div>
+                  <p className="text-sm font-semibold">{displayUserName}</p>
+                  <p className="text-xs" style={{ color: 'var(--ink-soft)' }}>
+                    {isAdmin ? 'Administrador' : 'Agente AFL'}
+                  </p>
+                </div>
+              </div>
             </header>
 
             {isInitialLoad ? (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                <SkeletonCard /><SkeletonCard /><SkeletonCard />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
               </div>
             ) : (
-               <>
-                  {activeTab === 'inicio' && (
-                    <div className="animate-in fade-in slide-in-from-bottom-6 duration-500">
-                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                          <StatCard title="VALOR BRUTO (MÊS)" value={globalStats.gross} icon={<TrendingUp size={32}/>} type="money" />
-                          <StatCard title="VALOR LÍQUIDO (CAIXA)" value={globalStats.net} icon={<Zap size={32}/>} type="money" highlight />
-                          <StatCard title="MEMBROS ATIVOS" value={activeTeam.length} icon={<Users size={32}/>} />
-                       </div>
-                       <div className="mt-8 bg-[#0a0a0a] border border-white/5 p-8 lg:p-10 rounded-[2.5rem] shadow-xl">
-                          <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-6">
-                            <div>
-                              <h3 className="text-2xl font-black italic text-white uppercase tracking-tighter">Desempenho da Equipe</h3>
-                              <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] mt-1">Top 5 Maiores Vendedores</p>
-                            </div>
-                            <Trophy className="text-yellow-400/20" size={32}/>
-                          </div>
-                          <div className="flex items-end gap-2 lg:gap-6 h-64 mt-8 pt-4">
-                            {activeTeam.slice(0, 5).map((member: any) => { 
-                              const fillPercentage = member.grossSales > 0 ? (member.grossSales / maxGrossChart) * 100 : 0; 
-                              const adjustedHeight = member.grossSales > 0 ? Math.max(5, fillPercentage) : 0; 
-                              return (
-                                <div key={member.discordId} className="flex-1 flex flex-col justify-end items-center group h-full">
-                                  <div className="text-[10px] lg:text-xs font-mono font-black italic text-zinc-600 group-hover:text-yellow-400 transition-colors mb-3">
-                                    R$ {formatCurrency(member.grossSales)}
-                                  </div>
-                                  <div className="w-full max-w-[80px] bg-white/[0.02] rounded-t-2xl border border-white/5 border-b-0 relative flex-1 flex flex-col justify-end overflow-hidden group-hover:border-yellow-400/20 transition-all">
-                                    <div className="w-full bg-gradient-to-t from-yellow-600 to-yellow-400 rounded-t-xl transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(250,204,21,0.2)] group-hover:brightness-110" style={{ height: `${adjustedHeight}%` }}></div>
-                                  </div>
-                                  <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 truncate w-full text-center mt-3 px-1 group-hover:text-white transition-colors" title={member.name || member.nome}>
-                                    {member.name || member.nome}
-                                  </div>
-                                </div>
-                              )
-                            })}
-                            {activeTeam.length === 0 && <div className="w-full h-full flex items-center justify-center text-zinc-600 text-xs font-black uppercase tracking-widest italic">Sem dados suficientes</div>}
-                          </div>
-                       </div>
+              <>
+                {activeTab === 'inicio' && (
+                  <div className="space-y-6 fade-up">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <StatCard title="Valor bruto (mês)" value={globalStats.gross} icon={<TrendingUp size={24} />} type="money" />
+                      <StatCard title="Valor líquido (caixa)" value={globalStats.net} icon={<Zap size={24} />} type="money" highlight />
+                      <StatCard title="Membros ativos" value={activeTeam.length} icon={<Users size={24} />} />
                     </div>
-                  )}
 
-                  {activeTab === 'ranking' && (
-                     <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl animate-in fade-in duration-500">
-                        <table className="w-full text-left font-black uppercase">
-                          <thead className="bg-yellow-400 text-black text-[11px] tracking-[0.2em]">
+                    <section
+                      className="surface rounded-[var(--radius-md)] border p-5 sm:p-6"
+                      style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}
+                    >
+                      <div className="mb-6 flex items-center justify-between">
+                        <div>
+                          <h2 className="text-xl font-semibold">Desempenho da equipe</h2>
+                          <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>Top 5 maiores vendedores do mês</p>
+                        </div>
+                        <Trophy size={24} style={{ color: 'var(--brand)' }} />
+                      </div>
+                      <div className="flex h-72 items-end gap-3 overflow-x-auto pt-4">
+                        {activeTeam.slice(0, 5).map((member: any) => {
+                          const fillPercentage = member.grossSales > 0 ? (member.grossSales / maxGrossChart) * 100 : 0;
+                          const adjustedHeight = member.grossSales > 0 ? Math.max(5, fillPercentage) : 0;
+                          return (
+                            <div key={member.discordId} className="flex min-w-[110px] flex-1 flex-col items-center justify-end gap-3">
+                              <span className="text-xs font-medium" style={{ color: 'var(--ink-soft)' }}>
+                                R$ {formatCurrency(member.grossSales)}
+                              </span>
+                              <div
+                                className="flex h-full w-full max-w-[90px] items-end overflow-hidden rounded-t-[28px] border border-b-0"
+                                style={{ background: 'var(--bg-muted)', borderColor: 'var(--line)' }}
+                              >
+                                <div
+                                  className="w-full rounded-t-[22px] transition-all duration-700"
+                                  style={{
+                                    height: `${adjustedHeight}%`,
+                                    background: 'linear-gradient(180deg, var(--brand) 0%, var(--brand-strong) 100%)',
+                                  }}
+                                />
+                              </div>
+                              <span className="w-full truncate text-center text-sm font-medium" title={member.name || member.nome}>
+                                {member.name || member.nome}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        {activeTeam.length === 0 && (
+                          <div className="flex h-full w-full items-center justify-center text-sm" style={{ color: 'var(--ink-soft)' }}>
+                            Sem dados suficientes
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {activeTab === 'ranking' && (
+                  <section className="surface overflow-hidden rounded-[var(--radius-md)] border fade-up" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-left">
+                        <thead style={{ background: 'var(--bg-muted)', color: 'var(--ink-soft)' }}>
+                          <tr>
+                            <th className="px-5 py-4 text-sm font-semibold">Rank</th>
+                            <th className="px-5 py-4 text-sm font-semibold">Agente</th>
+                            <th className="px-5 py-4 text-right text-sm font-semibold">Produção (mês)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {activeTeam.map((member: any, index: number) => (
+                            <tr key={member.discordId} className="border-t transition-colors hover:bg-black/[0.02]" style={{ borderColor: 'var(--line)' }}>
+                              <td className="px-5 py-4 text-lg font-semibold" style={{ color: 'var(--ink-soft)' }}>{index + 1}º</td>
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-3">
+                                  <img src={member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.nome || 'User')}&background=EAB308&color=000&bold=true`} className="h-10 w-10 rounded-xl object-cover" alt="" />
+                                  <span className="font-medium">{member.name || member.nome}</span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-4 text-right font-mono text-lg font-semibold" style={{ color: 'var(--brand-strong)' }}>
+                                R$ {formatCurrency(member.grossSales)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                )}
+
+                {activeTab === 'equipe' && (
+                  <div className="space-y-5 fade-up">
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {['Todos', ...ROLES_HIERARCHY].map(role => (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() => setSelectedRole(role)}
+                          className="rounded-full border px-4 py-2 text-sm font-medium transition-colors"
+                          style={selectedRole === role ? {
+                            background: 'var(--brand-soft)',
+                            color: 'var(--brand-strong)',
+                            borderColor: 'rgba(200,155,12,0.25)',
+                          } : {
+                            background: 'var(--bg-elevated)',
+                            color: 'var(--ink-soft)',
+                            borderColor: 'var(--line)',
+                          }}
+                        >
+                          {role}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      {filteredTeam.map((member: any) => (
+                        <button
+                          key={member.discordId}
+                          type="button"
+                          onClick={() => setSelectedMember(member)}
+                          className="surface fade-up rounded-[var(--radius-md)] border p-5 text-left transition-transform hover:-translate-y-1"
+                          style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}
+                        >
+                          <div className="mb-5 flex items-center gap-4">
+                            <img src={member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.nome || 'User')}&background=EAB308&color=000&bold=true`} className="h-14 w-14 rounded-2xl object-cover" alt="" />
+                            <div className="min-w-0">
+                              <h3 className="truncate text-lg font-semibold" title={member.name || member.nome}>{member.name || member.nome}</h3>
+                              <p className="truncate text-sm" style={{ color: 'var(--brand-strong)' }}>{member.actualRole}</p>
+                            </div>
+                          </div>
+                          <div className="space-y-3 border-t pt-4" style={{ borderColor: 'var(--line)' }}>
+                            <MetricRow label="Bruto" value={`R$ ${formatCurrency(member.grossSales)}`} />
+                            <MetricRow label="Líquido" value={`R$ ${formatCurrency(member.totalNet)}`} valueColor="var(--success)" />
+                            <div
+                              className="rounded-2xl px-4 py-3"
+                              style={{ background: 'var(--brand-soft)', color: 'var(--brand-strong)' }}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-medium">Saldo</span>
+                                <span className="font-mono text-base font-semibold">R$ {formatCurrency(member.finalBalance)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'gestao' && (
+                  <div className="space-y-5 fade-up">
+                    <SearchField
+                      value={muralSearchQuery}
+                      onChange={(value) => {
+                        setMuralSearchQuery(value);
+                        setMuralPaginationLimit(20);
+                      }}
+                      placeholder="Pesquisar cliente, agente ou item..."
+                    />
+                    <DataTableCard>
+                      <table className="min-w-full text-left">
+                        <thead style={{ background: 'var(--bg-muted)', color: 'var(--ink-soft)' }}>
+                          <tr>
+                            <th className="px-5 py-4 text-sm font-semibold">Membro</th>
+                            <th className="px-5 py-4 text-sm font-semibold">Tipo</th>
+                            <th className="px-5 py-4 text-sm font-semibold">Cliente / item</th>
+                            <th className="px-5 py-4 text-right text-sm font-semibold">Valor</th>
+                            <th className="px-5 py-4 text-right text-sm font-semibold">Data</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredMural.slice(0, muralPaginationLimit).map((record: any) => (
+                            <tr key={record.id} className="border-t transition-colors hover:bg-black/[0.02]" style={{ borderColor: 'var(--line)' }}>
+                              <td className="px-5 py-4 text-sm font-medium">{record.name || record.nome}</td>
+                              <td className="px-5 py-4">
+                                <TypeBadge type={record.type || record.tipo || 'VENDA'} />
+                              </td>
+                              <td className="px-5 py-4 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                                <TooltipText text={`${getDisplayClientName(record)} | ${getDisplayItemName(record)}`} maxWidth="260px" />
+                              </td>
+                              <td className="px-5 py-4 text-right font-mono text-sm font-semibold" style={{ color: record.type === 'SAQUE' || record.tipo === 'SAQUE' ? 'var(--danger)' : 'var(--success)' }}>
+                                {record.type === 'SAQUE' || record.tipo === 'SAQUE' ? '-' : '+'} R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record))}
+                              </td>
+                              <td className="px-5 py-4 text-right text-sm" style={{ color: 'var(--ink-soft)' }}>
+                                {new Date(record.createdAt || record.criado_em).toLocaleDateString('pt-BR')}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <LoadMoreFooter
+                        currentLength={filteredMural.length}
+                        limit={muralPaginationLimit}
+                        onClick={() => setMuralPaginationLimit(prev => prev + 20)}
+                        emptyText="Nenhum resultado encontrado."
+                      />
+                    </DataTableCard>
+                  </div>
+                )}
+
+                {activeTab === 'registrar' && canPostSales && (
+                  <div className="mx-auto max-w-3xl space-y-5 fade-up">
+                    <div className="surface rounded-[var(--radius-md)] border p-2" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        {[
+                          { id: 'VENDA', label: 'Venda', icon: <ShoppingCart size={16} /> },
+                          ...(isAdmin ? [{ id: 'CORRIDINHA', label: 'Bônus', icon: <Zap size={16} /> }, { id: 'SAQUE', label: 'Pagamento', icon: <Banknote size={16} /> }] : [])
+                        ].map(typeConfig => (
+                          <button
+                            key={typeConfig.id}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, type: typeConfig.id })}
+                            className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium transition-colors"
+                            style={formData.type === typeConfig.id ? {
+                              background: 'var(--brand-soft)',
+                              color: 'var(--brand-strong)',
+                            } : {
+                              background: 'transparent',
+                              color: 'var(--ink-soft)',
+                            }}
+                          >
+                            {typeConfig.icon}
+                            {typeConfig.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleFormSubmit} className="surface rounded-[var(--radius-md)] border p-6 sm:p-8" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium">Agente responsável</label>
+                          <select
+                            value={formData.vendorId || formData.recruitedId || formData.memberWithdrawalId}
+                            onChange={e => setFormData({ ...formData, vendorId: e.target.value, recruitedId: e.target.value, memberWithdrawalId: e.target.value })}
+                            disabled={!canSelectAnySeller}
+                            className="w-full rounded-2xl border px-4 py-3 outline-none transition-colors"
+                            style={{ background: 'var(--bg)', borderColor: 'var(--line)', color: 'var(--ink)' }}
+                            required
+                          >
+                            <option value="">Selecione na equipe...</option>
+                            {activeTeam.map((member: any) => <option key={member.discordId} value={member.discordId}>{member.name || member.nome} ({member.actualRole})</option>)}
+                          </select>
+                          {!canSelectAnySeller && (
+                            <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>
+                              Sua venda sera postada no seu proprio nome e ficara pendente para aprovacao do master.
+                            </p>
+                          )}
+                        </div>
+
+                        {formData.type === 'VENDA' && (
+                          <div className="space-y-5 fade-up">
+                            <InputField label="Cliente (nome / ID)" value={formData.client} onChange={(val: string) => setFormData({ ...formData, client: val })} placeholder="Ex: Lucas | 4116" />
+                            <InputField label="Item comprado" value={formData.item} onChange={(val: string) => setFormData({ ...formData, item: val })} placeholder="Ex: Farm de Dinheiro" />
+                            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                              <InputField label="Valor total (R$)" type="number" value={formData.amount} onChange={(val: string) => setFormData({ ...formData, amount: val })} placeholder="0,00" />
+                              <InputField label="Valor recebido (R$)" type="number" value={formData.receivedAmount} onChange={(val: string) => setFormData({ ...formData, receivedAmount: val })} placeholder="0,00" />
+                            </div>
+                            {requireDueDate && (
+                              <div className="fade-up">
+                                <InputField label="Data vencimento (pendência)" type="date" value={formData.dueDate} onChange={(val: string) => setFormData({ ...formData, dueDate: val })} required={true} />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {formData.type === 'CORRIDINHA' && (
+                          <div className="fade-up">
+                            <InputField label="Valor do bônus (R$)" type="number" value={formData.amount} onChange={(val: string) => setFormData({ ...formData, amount: val })} placeholder="Ex: 50,00" />
+                          </div>
+                        )}
+
+                        {formData.type === 'SAQUE' && (
+                          <div className="fade-up">
+                            <InputField label="Cashback pago ao agente (R$)" type="number" value={formData.amount} onChange={(val: string) => setFormData({ ...formData, amount: val })} placeholder="Ex: 150,00" />
+                          </div>
+                        )}
+
+                        <button
+                          disabled={isLoading}
+                          className="w-full rounded-2xl px-5 py-4 text-sm font-semibold transition-all"
+                          style={{
+                            background: 'var(--brand)',
+                            color: '#221a00',
+                            opacity: isLoading ? 0.6 : 1,
+                          }}
+                        >
+                          {isLoading ? 'PROCESSANDO...' : 'Enviar registro'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {activeTab === 'pendencias' && isAdmin && (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 fade-up">
+                    {pendingInstallments.length === 0 && (
+                      <EmptyState text="Nenhuma cobrança ativa" />
+                    )}
+                    {pendingInstallments.map((record: any) => (
+                      <div key={record.id} className="surface rounded-[var(--radius-md)] border p-5" style={{ borderColor: 'rgba(220,38,38,0.18)', boxShadow: 'var(--shadow-md)' }}>
+                        <div className="mb-5 flex items-start justify-between gap-4 border-b pb-4" style={{ borderColor: 'var(--line)' }}>
+                          <div>
+                            <h3 className="text-lg font-semibold">{getDisplayClientName(record)}</h3>
+                            <p className="mt-1 text-sm" style={{ color: 'var(--ink-soft)' }}>{record.name || record.nome}</p>
+                          </div>
+                          <span className="rounded-full px-3 py-1 text-xs font-semibold" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>
+                            Falta R$ {formatCurrency(getGrossValue(record) - getNetValue(record))}
+                          </span>
+                        </div>
+                        <div className="space-y-2 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                          <div>
+                            <span className="font-medium" style={{ color: 'var(--ink)' }}>Produto: </span>
+                            <TooltipText text={getDisplayItemName(record)} maxWidth="100%" />
+                          </div>
+                          <div>
+                            <span className="font-medium" style={{ color: 'var(--ink)' }}>Vencimento: </span>
+                            {record.dueDate?.split('-').reverse().join('/') || record.dataVencimento?.split('-').reverse().join('/') || 'A COMBINAR'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setInstallmentModalData(record)}
+                          className="mt-5 w-full rounded-2xl px-4 py-3 text-sm font-semibold transition-colors"
+                          style={{ background: 'var(--success)', color: '#052814' }}
+                        >
+                          Receber pagamento
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {activeTab === 'admin' && canApproveRecords && (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 fade-up">
+                    {pendingRecords.length === 0 && (
+                      <EmptyState text="Fila limpa" />
+                    )}
+                    {pendingRecords.map((record: any) => (
+                      <div key={record.id} className="surface rounded-[var(--radius-md)] border p-5" style={{ borderColor: 'rgba(200,155,12,0.2)', boxShadow: 'var(--shadow-md)' }}>
+                        <div className="mb-4">
+                          <h3 className="text-lg font-semibold">{record.name || record.nome}</h3>
+                          <div className="mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold" style={{ background: 'var(--brand-soft)', color: 'var(--brand-strong)' }}>
+                            {record.type || record.tipo} • R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record) || getPaidValue(record))}
+                          </div>
+                        </div>
+                        <div className="space-y-2 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                          <div>
+                            <span className="font-medium" style={{ color: 'var(--ink)' }}>Cliente: </span>
+                            <TooltipText text={getDisplayClientName(record)} maxWidth="100%" />
+                          </div>
+                          <div>
+                            <span className="font-medium" style={{ color: 'var(--ink)' }}>Item: </span>
+                            <TooltipText text={getDisplayItemName(record)} maxWidth="100%" />
+                          </div>
+                          {record.createdBy && (
+                            <div className="border-t pt-3" style={{ borderColor: 'var(--line)' }}>
+                              Postado por: <span style={{ color: 'var(--ink)' }}>{record.createdBy || record.criadoPor}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-5 flex gap-3">
+                          <button
+                            type="button"
+                            disabled={isLoading}
+                            onClick={() => handleApprovalDecision(record.id, 'APROVAR')}
+                            className="flex-1 rounded-2xl px-4 py-3 text-sm font-semibold"
+                            style={{ background: 'var(--brand)', color: '#221a00', opacity: isLoading ? 0.6 : 1 }}
+                          >
+                            Aprovar
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isLoading}
+                            onClick={() => handleApprovalDecision(record.id, 'REPROVAR')}
+                            className="rounded-2xl border px-4 py-3 transition-colors"
+                            style={{ borderColor: 'rgba(220,38,38,0.2)', color: 'var(--danger)', opacity: isLoading ? 0.6 : 1 }}
+                          >
+                            <X size={18} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {activeTab === 'admin_zone' && isAdmin && (
+                  <div className="space-y-6 fade-up">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <section className="surface rounded-[var(--radius-md)] border p-6" style={{ borderColor: 'rgba(220,38,38,0.18)', boxShadow: 'var(--shadow-md)' }}>
+                        <div className="mb-4 flex items-center gap-3">
+                          <Archive size={22} style={{ color: 'var(--danger)' }} />
+                          <h2 className="text-xl font-semibold">Virada de mês</h2>
+                        </div>
+                        <p className="mb-5 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                          Arquiva as vendas e zera contadores. USE APENAS NO DIA 1º.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleMonthRolloverRequest}
+                          disabled={isLoading}
+                          className="w-full rounded-2xl px-4 py-3 text-sm font-semibold"
+                          style={{ background: 'var(--danger)', color: 'white', opacity: isLoading ? 0.6 : 1 }}
+                        >
+                          Executar virada
+                        </button>
+                      </section>
+
+                      <section className="surface rounded-[var(--radius-md)] border p-6" style={{ borderColor: 'rgba(200,155,12,0.22)', boxShadow: 'var(--shadow-md)' }}>
+                        <div className="mb-4 flex items-center gap-3">
+                          <Database size={22} style={{ color: 'var(--warning)' }} />
+                          <h2 className="text-xl font-semibold">Restaurar sistema</h2>
+                        </div>
+                        <p className="mb-5 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                          Desfaz erro da virada precoce. Volta as vendas para o Painel.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleSystemRestoreRequest}
+                          disabled={isLoading}
+                          className="w-full rounded-2xl px-4 py-3 text-sm font-semibold"
+                          style={{ background: 'var(--warning-soft)', color: 'var(--warning)', opacity: isLoading ? 0.6 : 1 }}
+                        >
+                          Restaurar vendas
+                        </button>
+                      </section>
+                    </div>
+
+                    <section className="surface overflow-hidden rounded-[var(--radius-md)] border" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+                      <div className="flex flex-col gap-4 border-b p-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--line)' }}>
+                        <div>
+                          <h2 className="text-lg font-semibold">Logs de dados</h2>
+                          <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>Registros aprovados e autoria da ação</p>
+                        </div>
+                        <div className="w-full sm:w-80">
+                          <SearchField
+                            value={logSearchQuery}
+                            onChange={(value) => {
+                              setLogSearchQuery(value);
+                              setLogPaginationLimit(20);
+                            }}
+                            placeholder="Buscar registro..."
+                          />
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-left">
+                          <thead style={{ background: 'var(--bg-muted)', color: 'var(--ink-soft)' }}>
                             <tr>
-                              <th className="px-8 py-5">RANK</th>
-                              <th className="px-8 py-5 text-center">AGENTE</th>
-                              <th className="px-8 py-5 text-right">PRODUÇÃO (MÊS)</th>
+                              <th className="px-5 py-4 text-sm font-semibold">Membro</th>
+                              <th className="px-5 py-4 text-sm font-semibold">Tipo</th>
+                              <th className="px-5 py-4 text-sm font-semibold">Autoria da ação</th>
+                              <th className="px-5 py-4 text-right text-sm font-semibold">Ação</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-white/5">
-                            {activeTeam.map((member: any, index: number) => (
-                              <tr key={member.discordId} className="hover:bg-white/[0.02] transition-all group">
-                                <td className="px-8 py-6 italic text-3xl text-zinc-700 group-hover:text-yellow-400/30 transition-colors w-24">{index + 1}º</td>
-                                <td className="px-8 py-6 flex items-center justify-center gap-4 text-lg text-white italic tracking-tight">
-                                  <img src={member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.nome || 'User')}&background=EAB308&color=000&bold=true`} className="w-10 h-10 rounded-xl" alt=""/> 
-                                  {member.name || member.nome}
+                          <tbody>
+                            {filteredLogs.slice(0, logPaginationLimit).map((record: any) => (
+                              <tr key={record.id} className="border-t transition-colors hover:bg-black/[0.02]" style={{ borderColor: 'var(--line)' }}>
+                                <td className="px-5 py-4 text-sm font-medium">{record.name || record.nome}</td>
+                                <td className="px-5 py-4">
+                                  <span className="rounded-full border px-3 py-1 text-xs font-medium" style={{ borderColor: 'var(--line)', color: 'var(--ink-soft)' }}>
+                                    {record.type || record.tipo} • R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record) || getPaidValue(record))}
+                                  </span>
                                 </td>
-                                <td className="px-8 py-6 text-right text-yellow-400 text-2xl font-mono italic">R$ {formatCurrency(member.grossSales)}</td>
+                                <td className="px-5 py-4 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                                  <div className="space-y-1">
+                                    <div>Postou: {record.createdBy || record.criadoPor || 'Sistema'}</div>
+                                    <div>Aprovou: {record.evaluatedBy || record.avaliadoPor || 'N/A'}</div>
+                                  </div>
+                                </td>
+                                <td className="px-5 py-4 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteLogRequest(record.id)}
+                                    className="inline-flex rounded-xl p-2 transition-colors"
+                                    style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
-                     </div>
-                  )}
+                      </div>
+                      <LoadMoreFooter
+                        currentLength={filteredLogs.length}
+                        limit={logPaginationLimit}
+                        onClick={() => setLogPaginationLimit(prev => prev + 20)}
+                        emptyText="Nenhum log encontrado."
+                      />
+                    </section>
+                  </div>
+                )}
 
-                  {activeTab === 'equipe' && (
-                     <div className="animate-in fade-in duration-500">
-                       <div className="flex gap-3 mb-8 overflow-x-auto pb-4 no-scrollbar">
-                         {['Todos', ...ROLES_HIERARCHY].map(role => (
-                           <button key={role} onClick={() => setSelectedRole(role)} className={`px-6 py-3 rounded-full text-[11px] font-black uppercase transition-all whitespace-nowrap tracking-widest ${selectedRole === role ? 'bg-yellow-400 text-black shadow-[0_0_15px_rgba(250,204,21,0.3)]' : 'bg-[#0a0a0a] text-zinc-500 border border-white/5 hover:text-white hover:bg-white/5'}`}>
-                             {role}
-                           </button>
-                         ))}
-                       </div>
-                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                         {filteredTeam.map((member: any) => (
-                           <div key={member.discordId} onClick={() => setSelectedMember(member)} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-white/5 hover:border-yellow-400/40 cursor-pointer shadow-lg group transition-all hover:-translate-y-1 relative">
-                             <div className="flex items-center gap-5 mb-6">
-                               <img src={member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.nome || 'User')}&background=EAB308&color=000&bold=true`} className="w-16 h-16 rounded-[1.2rem] border-2 border-zinc-800 group-hover:border-yellow-400 transition-colors shadow-md" alt="" />
-                               <div className="flex-1 min-w-0">
-                                 <h4 className="font-black uppercase text-white text-xl truncate tracking-tight" title={member.name || member.nome}>{member.name || member.nome}</h4>
-                                 <p className="text-[9px] text-yellow-400 font-bold mt-1 italic tracking-[0.2em] opacity-90 truncate">{member.actualRole}</p>
-                               </div>
-                             </div>
-                             <div className="pt-6 border-t border-white/5 space-y-3 text-[10px] font-black uppercase tracking-widest">
-                               <div className="flex justify-between text-zinc-500"><span>BRUTO:</span><span className="text-white font-mono text-sm">R$ {formatCurrency(member.grossSales)}</span></div>
-                               <div className="flex justify-between text-green-500/80"><span>LÍQUIDO:</span><span className="text-green-400 font-mono text-sm">R$ {formatCurrency(member.totalNet)}</span></div>
-                               <div className="flex justify-between text-yellow-400 bg-yellow-400/5 px-3 py-3 rounded-xl mt-4 border border-yellow-400/10 items-center"><span>SALDO:</span><span className="font-mono text-base">R$ {formatCurrency(member.finalBalance)}</span></div>
-                             </div>
-                           </div>
-                         ))}
-                       </div>
-                     </div>
-                  )}
+                {activeTab === 'historico_backup' && isAdmin && (
+                  <div className="space-y-6 fade-up">
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                      <section className="surface rounded-[var(--radius-md)] border p-5" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+                        <label className="mb-2 block text-sm font-medium">Período</label>
+                        <select
+                          value={backupMonth}
+                          onChange={(e) => setBackupMonth(e.target.value)}
+                          className="w-full rounded-2xl border px-4 py-3 outline-none"
+                          style={{ background: 'var(--bg)', borderColor: 'var(--line)', color: 'var(--ink)' }}
+                        >
+                          <option value="">Selecione...</option>
+                          {availableMonths.map((monthOption: any) => <option key={monthOption} value={monthOption}>{formatMonthName(monthOption)}</option>)}
+                        </select>
+                      </section>
+                      <div className="grid grid-cols-2 gap-4">
+                        <StatMiniCard label="Bruto" value={`R$ ${formatCurrency(backupStats.gross)}`} />
+                        <StatMiniCard label="Caixa" value={`R$ ${formatCurrency(backupStats.net)}`} highlight />
+                      </div>
+                    </div>
 
-                  {activeTab === 'gestao' && (
-                     <div className="animate-in fade-in duration-500">
-                       <div className="mb-6 flex relative group w-full md:w-96">
-                         <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none text-zinc-500 group-focus-within:text-yellow-400 transition-colors">
-                           <Search size={18} />
-                         </div>
-                         <input type="text" value={muralSearchQuery} onChange={(e) => { setMuralSearchQuery(e.target.value); setMuralPaginationLimit(20); }} placeholder="PESQUISAR CLIENTE, AGENTE OU ITEM..." className="w-full bg-[#0a0a0a] border border-white/5 p-4 pl-14 rounded-2xl text-white outline-none focus:border-yellow-400/50 font-black text-[10px] tracking-[0.2em] uppercase transition-all shadow-lg placeholder:text-zinc-700" />
-                       </div>
-                       <div className="bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden shadow-xl">
-                         <div className="overflow-x-auto">
-                           <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
-                             <thead className="bg-white/5 text-zinc-500 border-b border-white/5">
-                               <tr>
-                                 <th className="px-8 py-5">MEMBRO</th>
-                                 <th className="px-8 py-5">TIPO</th>
-                                 <th className="px-8 py-5">CLIENTE / ITEM</th>
-                                 <th className="px-8 py-5 text-right">VALOR</th>
-                                 <th className="px-8 py-5 text-right">DATA</th>
-                               </tr>
-                             </thead>
-                             <tbody className="divide-y divide-white/5">
-                               {filteredMural.slice(0, muralPaginationLimit).map((record: any) => (
-                                 <tr key={record.id} className="hover:bg-white/[0.02] transition-colors group">
-                                   <td className="px-8 py-5 text-white text-xs italic group-hover:text-yellow-400 transition-colors">{record.name || record.nome}</td>
-                                   <td className="px-8 py-5">
-                                     <span className={`px-3 py-1.5 rounded-lg text-[9px] border ${record.type === 'SAQUE' || record.tipo === 'SAQUE' ? 'text-red-500 border-red-500/20 bg-red-500/5' : record.type === 'CORRIDINHA' || record.tipo === 'CORRIDINHA' ? 'text-blue-400 border-blue-400/20 bg-blue-400/5' : 'text-yellow-400 border-yellow-400/20 bg-yellow-400/5'}`}>
-                                       {record.type || record.tipo || 'VENDA'}
-                                     </span>
-                                   </td>
-                                   <td className="px-8 py-5 text-zinc-400 italic text-xs w-[250px]">
-                                     <TooltipText text={`${getDisplayClientName(record)} | ${getDisplayItemName(record)}`} maxWidth="250px" />
-                                   </td>
-                                   <td className={`px-8 py-5 font-mono text-sm text-right whitespace-nowrap ${record.type === 'SAQUE' || record.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>
-                                     {record.type === 'SAQUE' || record.tipo === 'SAQUE' ? '-' : '+'} R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record))}
-                                   </td>
-                                   <td className="px-8 py-5 text-zinc-600 text-[10px] text-right">{new Date(record.createdAt || record.criado_em).toLocaleDateString('pt-BR')}</td>
-                                 </tr>
-                               ))}
-                             </tbody>
-                           </table>
-                           {filteredMural.length > muralPaginationLimit && (
-                             <div className="p-4 border-t border-white/5 flex justify-center bg-black/20">
-                               <button onClick={() => setMuralPaginationLimit(prev => prev + 20)} className="flex items-center gap-2 text-[10px] text-zinc-500 hover:text-yellow-400 font-black uppercase tracking-[0.3em] px-6 py-3 rounded-xl hover:bg-white/5 transition-all">
-                                 CARREGAR MAIS <ChevronDown size={14} />
-                               </button>
-                             </div>
-                           )}
-                           {filteredMural.length === 0 && (
-                             <div className="p-12 text-center text-zinc-600 font-black text-xs uppercase tracking-[0.3em] italic">NENHUM RESULTADO ENCONTRADO.</div>
-                           )}
-                         </div>
-                       </div>
-                     </div>
-                  )}
-
-                  {activeTab === 'registrar' && canPostSales && (
-                     <div className="max-w-3xl mx-auto animate-in zoom-in-95 duration-300">
-                       <div className="flex gap-2 p-1.5 bg-[#0a0a0a] rounded-[1.5rem] mb-8 border border-white/5 shadow-lg">
-                         {[
-                           {id:'VENDA', label:'VENDA', icon:<ShoppingCart size={16}/>},
-                           ...(isAdmin ? [{id:'CORRIDINHA', label:'BÔNUS', icon:<Zap size={16}/>}, {id:'SAQUE', label:'PAGAMENTO', icon:<Banknote size={16}/>}] : [])
-                         ].map(typeConfig => (
-                           <button key={typeConfig.id} onClick={() => setFormData({...formData, type: typeConfig.id})} className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-[11px] font-black tracking-[0.2em] transition-all ${formData.type === typeConfig.id ? 'bg-yellow-400 text-black shadow-md' : 'text-zinc-600 hover:text-white'}`}>
-                             {typeConfig.icon}{typeConfig.label}
-                           </button>
-                         ))}
-                       </div>
-                       <form onSubmit={handleFormSubmit} className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl space-y-6">
-                         <div className="space-y-3">
-                           <label className="text-[11px] uppercase text-yellow-400 font-black tracking-widest ml-3">AGENTE RESPONSÁVEL</label>
-                           <select value={formData.vendorId || formData.recruitedId || formData.memberWithdrawalId} onChange={e => setFormData({...formData, vendorId: e.target.value, recruitedId: e.target.value, memberWithdrawalId: e.target.value})} disabled={!canSelectAnySeller} className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-yellow-400 font-black uppercase text-sm appearance-none cursor-pointer shadow-inner disabled:cursor-not-allowed disabled:opacity-70" required>
-                             <option value="">Selecione na equipe...</option>
-                             {activeTeam.map((member: any) => <option key={member.discordId} value={member.discordId}>{member.name || member.nome} ({member.actualRole})</option>)}
-                           </select>
-                           {!canSelectAnySeller && (
-                             <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] ml-3">
-                               Sua venda sera postada no seu proprio nome e ficara pendente para aprovacao do master.
-                             </p>
-                           )}
-                         </div>
-                         
-                         {formData.type === 'VENDA' && (
-                           <div className="space-y-6 animate-in fade-in duration-500">
-                             <InputField label="CLIENTE (NOME / ID)" value={formData.client} onChange={(val: string)=>setFormData({...formData, client: val})} placeholder="Ex: Lucas | 4116" />
-                             <InputField label="ITEM COMPRADO" value={formData.item} onChange={(val: string)=>setFormData({...formData, item: val})} placeholder="Ex: Farm de Dinheiro" />
-                             <div className="grid grid-cols-2 gap-5">
-                               <InputField label="VALOR TOTAL (R$)" type="number" value={formData.amount} onChange={(val: string)=>setFormData({...formData, amount: val})} placeholder="0,00" />
-                               <InputField label="VALOR RECEBIDO (R$)" type="number" value={formData.receivedAmount} onChange={(val: string)=>setFormData({...formData, receivedAmount: val})} placeholder="0,00" />
-                             </div>
-                             {requireDueDate && (
-                               <div className="animate-in slide-in-from-top-4 fade-in duration-300">
-                                 <InputField label="DATA VENCIMENTO (PENDÊNCIA)" type="date" value={formData.dueDate} onChange={(val: string)=>setFormData({...formData, dueDate: val})} required={true} />
-                               </div>
-                             )}
-                           </div>
-                         )}
-                         
-                         {formData.type === 'CORRIDINHA' && (
-                           <div className="animate-in slide-in-from-top-4 duration-300">
-                             <InputField label="VALOR DO BÔNUS (R$)" type="number" value={formData.amount} onChange={(val: string)=>setFormData({...formData, amount: val})} placeholder="Ex: 50,00" />
-                           </div>
-                         )}
-                         
-                         {formData.type === 'SAQUE' && (
-                           <div className="animate-in slide-in-from-top-4 duration-300">
-                             <InputField label="CASHBACK PAGO AO AGENTE (R$)" type="number" value={formData.amount} onChange={(val: string)=>setFormData({...formData, amount: val})} placeholder="Ex: 150,00" />
-                           </div>
-                         )}
-                         
-                         <button disabled={isLoading} className={`w-full bg-yellow-400 text-black font-black py-5 rounded-2xl uppercase tracking-[0.3em] text-sm shadow-lg mt-8 transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-yellow-300 active:scale-95'}`}>
-                           {isLoading ? 'PROCESSANDO...' : 'ENVIAR REGISTRO'}
-                         </button>
-                       </form>
-                     </div>
-                  )}
-
-                  {activeTab === 'pendencias' && isAdmin && (
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-                       {pendingInstallments.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Nenhuma cobrança ativa</p></div>}
-                       {pendingInstallments.map((record: any) => (
-                         <div key={record.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-red-500/20 shadow-lg flex flex-col justify-between group relative overflow-hidden transition-all hover:border-red-500/40 hover:-translate-y-1">
-                           <div className="absolute -top-4 -right-4 p-6 text-red-500/5 group-hover:text-red-500/10 transition-colors"><AlertCircle size={80}/></div>
-                           <div className="relative z-10">
-                             <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-6">
-                               <h4 className="text-2xl text-white italic font-black uppercase truncate pr-4 tracking-tighter">{getDisplayClientName(record)}</h4>
-                               <span className="bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-black tracking-widest shadow-md whitespace-nowrap flex-shrink-0 ml-2">FALTA R$ {formatCurrency(getGrossValue(record) - getNetValue(record))}</span>
-                             </div>
-                             <div className="space-y-2 mb-8 text-[11px] font-black uppercase text-zinc-500 tracking-widest">
-                               <p>AGENTE: <span className="text-zinc-100 ml-2">{record.name || record.nome}</span></p>
-                               <div className="flex w-full items-center">
-                                  <span className="mr-2 shrink-0">PRODUTO:</span> 
-                                  <div className="text-zinc-100 min-w-0 flex-1">
-                                    <TooltipText text={getDisplayItemName(record)} maxWidth="100%" />
-                                  </div>
-                               </div>
-                               <p className="mt-4 pt-2">VENCIMENTO: <span className="text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-md border border-yellow-400/20">{record.dueDate?.split('-').reverse().join('/') || record.dataVencimento?.split('-').reverse().join('/') || 'A COMBINAR'}</span></p>
-                             </div>
-                           </div>
-                           <button onClick={() => setInstallmentModalData(record)} className="w-full bg-green-500 text-black font-black py-4 rounded-xl uppercase text-[11px] tracking-widest hover:bg-green-400 shadow-md relative z-10 transition-all active:scale-95">RECEBER PAGAMENTO</button>
-                         </div>
-                       ))}
-                     </div>
-                  )}
-
-                  {activeTab === 'admin' && canApproveRecords && (
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-                       {pendingRecords.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Fila limpa</p></div>}
-                       {pendingRecords.map((record: any) => (
-                         <div key={record.id} className="bg-[#0a0a0a] p-8 rounded-[2rem] border border-yellow-400/20 shadow-lg flex flex-col justify-between">
-                           <div>
-                             <h4 className="text-2xl text-white italic font-black uppercase mb-2 truncate tracking-tighter">{record.name || record.nome}</h4>
-                             <p className="text-yellow-400 text-[10px] font-black uppercase mb-6 tracking-[0.2em] bg-yellow-400/10 inline-block px-3 py-1.5 rounded-lg">{record.type || record.tipo} • R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record) || getPaidValue(record))}</p>
-                             <div className="space-y-1.5 mb-8 text-[10px] font-black uppercase text-zinc-500">
-                               <div className="flex items-center w-full">
-                                 <span className="mr-2 shrink-0">CLIENTE:</span> 
-                                 <span className="text-zinc-300 min-w-0 flex-1"><TooltipText text={getDisplayClientName(record)} maxWidth="100%" /></span>
-                               </div>
-                               <div className="flex items-center w-full">
-                                 <span className="mr-2 shrink-0">ITEM:</span> 
-                                 <span className="text-zinc-300 min-w-0 flex-1"><TooltipText text={getDisplayItemName(record)} maxWidth="100%" /></span>
-                               </div>
-                               {record.createdBy && <p className="pt-2 mt-2 border-t border-white/5 text-zinc-400 italic">POSTADO POR: <span className="text-white ml-1">{record.createdBy || record.criadoPor}</span></p>}
-                             </div>
-                           </div>
-                           <div className="flex gap-3">
-                             <button disabled={isLoading} onClick={() => handleApprovalDecision(record.id, 'APROVAR')} className={`flex-1 bg-yellow-400 text-black font-black py-3.5 rounded-xl uppercase text-[10px] shadow-md transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-yellow-300'}`}>APROVAR</button>
-                             <button disabled={isLoading} onClick={() => handleApprovalDecision(record.id, 'REPROVAR')} className={`px-5 py-3.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-500 hover:text-white'}`}><X size={18}/></button>
-                           </div>
-                         </div>
-                       ))}
-                     </div>
-                  )}
-
-                  {activeTab === 'admin_zone' && isAdmin && (
-                     <div className="space-y-10 animate-in fade-in duration-500">
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                         <div className="bg-red-500/5 border border-red-500/20 p-10 rounded-[2.5rem] shadow-lg relative overflow-hidden group">
-                           <div className="absolute top-0 right-0 p-8 text-red-500/5"><Archive size={80}/></div>
-                           <h3 className="text-3xl font-black italic text-white mb-4 tracking-tighter">VIRADA DE MÊS</h3>
-                           <p className="text-zinc-500 mb-8 text-xs font-bold uppercase tracking-widest leading-relaxed">Arquiva as vendas e zera contadores. USE APENAS NO DIA 1º.</p>
-                           <button onClick={handleMonthRolloverRequest} disabled={isLoading} className={`w-full bg-red-600 text-white font-black py-4 rounded-xl uppercase text-xs shadow-md transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-500 active:scale-95'}`}>EXECUTAR VIRADA</button>
-                         </div>
-                         <div className="bg-purple-500/5 border border-purple-500/20 p-10 rounded-[2.5rem] shadow-lg relative overflow-hidden group">
-                           <div className="absolute top-0 right-0 p-8 text-purple-500/5"><Database size={80}/></div>
-                           <h3 className="text-3xl font-black italic text-white mb-4 tracking-tighter">RESTAURAR SISTEMA</h3>
-                           <p className="text-zinc-500 mb-8 text-xs font-bold uppercase tracking-widest leading-relaxed">Desfaz erro da virada precoce. Volta as vendas para o Painel.</p>
-                           <button onClick={handleSystemRestoreRequest} disabled={isLoading} className={`w-full bg-purple-600 text-white font-black py-4 rounded-xl uppercase text-xs shadow-md transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-500 active:scale-95'}`}>RESTAURAR VENDAS</button>
-                         </div>
-                       </div>
-                       
-                       <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-xl">
-                         <div className="p-6 px-8 border-b border-white/5 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-                           <h4 className="font-black italic text-zinc-500 uppercase tracking-[0.3em] text-[11px]">LOGS DE DADOS</h4>
-                           <div className="flex relative group w-full md:w-80">
-                             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-zinc-500 group-focus-within:text-yellow-400 transition-colors"><Search size={14} /></div>
-                             <input type="text" value={logSearchQuery} onChange={(e) => { setLogSearchQuery(e.target.value); setLogPaginationLimit(20); }} placeholder="BUSCAR REGISTRO..." className="w-full bg-black border border-white/5 p-3 pl-10 rounded-xl text-white outline-none focus:border-yellow-400/50 font-black text-[9px] tracking-[0.2em] uppercase transition-all shadow-inner placeholder:text-zinc-700" />
-                           </div>
-                         </div>
-                         <div className="overflow-x-auto">
-                           <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
-                             <thead className="bg-white/5 text-zinc-600 border-b border-white/5">
-                               <tr>
-                                 <th className="px-8 py-5">MEMBRO</th>
-                                 <th className="px-8 py-5">TIPO</th>
-                                 <th className="px-8 py-5 text-yellow-400">AUTORIA DA AÇÃO</th>
-                                 <th className="px-8 py-5 text-right">AÇÃO</th>
-                               </tr>
-                             </thead>
-                             <tbody className="divide-y divide-white/5">
-                               {filteredLogs.slice(0, logPaginationLimit).map((record: any) => (
-                                 <tr key={record.id} className="hover:bg-white/[0.01] transition-colors">
-                                   <td className="px-8 py-5 text-white text-xs">{record.name || record.nome}</td>
-                                   <td className="px-8 py-5">
-                                     <span className="text-zinc-500 border border-white/5 px-3 py-1.5 rounded-lg text-[9px]">{record.type || record.tipo} • R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record) || getPaidValue(record))}</span>
-                                   </td>
-                                   <td className="px-8 py-5">
-                                     <div className="flex flex-col gap-1.5">
-                                       <span className="text-[9px] text-zinc-400 italic">📝 Postou: {record.createdBy || record.criadoPor || 'Sistema'}</span>
-                                       <span className="text-[9px] text-yellow-400/80 italic">🛡️ Aprovou: {record.evaluatedBy || record.avaliadoPor || 'N/A'}</span>
-                                     </div>
-                                   </td>
-                                   <td className="px-8 py-5 text-right">
-                                     <button onClick={() => handleDeleteLogRequest(record.id)} className="text-red-500/40 hover:text-red-500 p-2.5 bg-red-500/5 rounded-lg transition-all"><Trash2 size={16}/></button>
-                                   </td>
-                                 </tr>
-                               ))}
-                             </tbody>
-                           </table>
-                           {filteredLogs.length > logPaginationLimit && (
-                             <div className="p-4 border-t border-white/5 flex justify-center bg-black/20">
-                               <button onClick={() => setLogPaginationLimit(prev => prev + 20)} className="flex items-center gap-2 text-[10px] text-zinc-500 hover:text-yellow-400 font-black uppercase tracking-[0.3em] px-6 py-3 rounded-xl hover:bg-white/5 transition-all">
-                                 CARREGAR MAIS <ChevronDown size={14} />
-                               </button>
-                             </div>
-                           )}
-                           {filteredLogs.length === 0 && <div className="p-10 text-center text-zinc-600 font-black text-xs uppercase tracking-[0.3em] italic">NENHUM LOG ENCONTRADO.</div>}
-                         </div>
-                       </div>
-                     </div>
-                  )}
-
-                  {activeTab === 'historico_backup' && isAdmin && (
-                     <div className="space-y-8 animate-in fade-in duration-500">
-                       <div className="flex flex-col md:flex-row md:items-center gap-6 bg-[#0a0a0a] p-8 rounded-[2.5rem] border border-white/5 shadow-lg">
-                         <div className="flex-1">
-                           <p className="text-[11px] font-black uppercase text-zinc-500 mb-3 tracking-[0.3em] italic">PERÍODO</p>
-                           <select value={backupMonth} onChange={(e) => setBackupMonth(e.target.value)} className="w-full bg-black border border-white/10 text-yellow-400 p-4 rounded-xl outline-none font-black uppercase text-sm cursor-pointer shadow-inner appearance-none">
-                             <option value="">Selecione...</option>
-                             {availableMonths.map((monthOption: any) => <option key={monthOption} value={monthOption}>{formatMonthName(monthOption)}</option>)}
-                           </select>
-                         </div>
-                         <div className="flex-1 flex gap-5">
-                           <div className="flex-1 bg-black p-6 rounded-[1.5rem] border border-white/5 shadow-inner">
-                             <p className="text-[10px] text-zinc-600 font-black mb-2 uppercase tracking-widest italic">BRUTO</p>
-                             <p className="text-2xl font-mono text-white italic font-black">R$ {formatCurrency(backupStats.gross)}</p>
-                           </div>
-                           <div className="flex-1 bg-black p-6 rounded-[1.5rem] border border-green-500/10 shadow-inner">
-                             <p className="text-[10px] text-green-500/70 font-black mb-2 uppercase tracking-widest italic">CAIXA</p>
-                             <p className="text-2xl font-mono text-green-400 italic font-black">R$ {formatCurrency(backupStats.net)}</p>
-                           </div>
-                         </div>
-                       </div>
-                       
-                       <div className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-lg">
-                         <div className="p-6 border-b border-white/5">
-                           <div className="flex relative group w-full md:w-96">
-                             <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none text-zinc-500 group-focus-within:text-yellow-400 transition-colors"><Search size={16} /></div>
-                             <input type="text" value={historySearchQuery} onChange={(e) => { setHistorySearchQuery(e.target.value); setHistoryPaginationLimit(20); }} placeholder="PESQUISAR NO HISTÓRICO..." className="w-full bg-black border border-white/5 p-4 pl-12 rounded-xl text-white outline-none focus:border-yellow-400/50 font-black text-[10px] tracking-[0.2em] uppercase transition-all shadow-inner placeholder:text-zinc-700" />
-                           </div>
-                         </div>
-                         <div className="overflow-x-auto">
-                           <table className="w-full text-left font-black uppercase text-[11px] tracking-widest whitespace-nowrap min-w-max">
-                             <thead className="bg-white/5 text-zinc-600 border-b border-white/5">
-                               <tr>
-                                 <th className="px-8 py-5">AGENTE</th>
-                                 <th className="px-8 py-5">TIPO</th>
-                                 <th className="px-8 py-5">VALOR</th>
-                                 <th className="px-8 py-5 text-right">DIA</th>
-                               </tr>
-                             </thead>
-                             <tbody className="divide-y divide-white/5">
-                               {filteredHistory.slice(0, historyPaginationLimit).map((record: any) => (
-                                 <tr key={record.id} className="hover:bg-white/[0.02] transition-colors group">
-                                   <td className="px-8 py-5 text-white text-xs italic group-hover:text-yellow-400 transition-colors">{record.name || record.nome}</td>
-                                   <td className="px-8 py-5 text-zinc-500 text-[10px] italic">{record.type || record.tipo}</td>
-                                   <td className={`px-8 py-5 font-mono text-sm ${record.type === 'SAQUE' || record.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>
-                                     {record.type === 'SAQUE' || record.tipo === 'SAQUE' ? '-' : '+'} R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record) || getPaidValue(record))}
-                                   </td>
-                                   <td className="px-8 py-5 text-zinc-600 text-[10px] font-mono text-right">{new Date(record.createdAt || record.criado_em).toLocaleDateString('pt-BR')}</td>
-                                 </tr>
-                               ))}
-                             </tbody>
-                           </table>
-                           {filteredHistory.length > historyPaginationLimit && (
-                             <div className="p-4 border-t border-white/5 flex justify-center bg-black/20">
-                               <button onClick={() => setHistoryPaginationLimit(prev => prev + 20)} className="flex items-center gap-2 text-[10px] text-zinc-500 hover:text-yellow-400 font-black uppercase tracking-[0.3em] px-6 py-3 rounded-xl hover:bg-white/5 transition-all">
-                                 CARREGAR MAIS <ChevronDown size={14} />
-                               </button>
-                             </div>
-                           )}
-                           {filteredHistory.length === 0 && <div className="p-10 text-center text-zinc-600 font-black text-xs uppercase tracking-[0.3em] italic">NENHUM REGISTRO ENCONTRADO.</div>}
-                         </div>
-                       </div>
-                     </div>
-                  )}
-               </>
+                    <section className="surface overflow-hidden rounded-[var(--radius-md)] border" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+                      <div className="border-b p-5" style={{ borderColor: 'var(--line)' }}>
+                        <div className="max-w-md">
+                          <SearchField
+                            value={historySearchQuery}
+                            onChange={(value) => {
+                              setHistorySearchQuery(value);
+                              setHistoryPaginationLimit(20);
+                            }}
+                            placeholder="Pesquisar no histórico..."
+                          />
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-left">
+                          <thead style={{ background: 'var(--bg-muted)', color: 'var(--ink-soft)' }}>
+                            <tr>
+                              <th className="px-5 py-4 text-sm font-semibold">Agente</th>
+                              <th className="px-5 py-4 text-sm font-semibold">Tipo</th>
+                              <th className="px-5 py-4 text-sm font-semibold">Valor</th>
+                              <th className="px-5 py-4 text-right text-sm font-semibold">Dia</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredHistory.slice(0, historyPaginationLimit).map((record: any) => (
+                              <tr key={record.id} className="border-t transition-colors hover:bg-black/[0.02]" style={{ borderColor: 'var(--line)' }}>
+                                <td className="px-5 py-4 text-sm font-medium">{record.name || record.nome}</td>
+                                <td className="px-5 py-4 text-sm" style={{ color: 'var(--ink-soft)' }}>{record.type || record.tipo}</td>
+                                <td className="px-5 py-4 font-mono text-sm font-semibold" style={{ color: record.type === 'SAQUE' || record.tipo === 'SAQUE' ? 'var(--danger)' : 'var(--success)' }}>
+                                  {record.type === 'SAQUE' || record.tipo === 'SAQUE' ? '-' : '+'} R$ {formatCurrency(getGrossValue(record) || getNetValue(record) || getBonusValue(record) || getPaidValue(record))}
+                                </td>
+                                <td className="px-5 py-4 text-right text-sm" style={{ color: 'var(--ink-soft)' }}>
+                                  {new Date(record.createdAt || record.criado_em).toLocaleDateString('pt-BR')}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <LoadMoreFooter
+                        currentLength={filteredHistory.length}
+                        limit={historyPaginationLimit}
+                        onClick={() => setHistoryPaginationLimit(prev => prev + 20)}
+                        emptyText="Nenhum registro encontrado."
+                      />
+                    </section>
+                  </div>
+                )}
+              </>
             )}
-        </div>
-        
-        <footer className="mt-auto pb-8 pt-8 flex flex-col items-center justify-center pointer-events-none opacity-40 w-full border-t border-white/5">
-          <p className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500 italic mb-1 text-center">
-            © {new Date().getFullYear()} AFL PAINEL • TODOS OS DIREITOS RESERVADOS
-          </p>
-          <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white italic text-center">
-            DESENVOLVIDO POR <span className="text-yellow-400">{'</>'} VZ</span>
-          </p>
-        </footer>
-      </main>
+
+            <footer className="mt-10 border-t pt-6 text-center text-sm" style={{ borderColor: 'var(--line)', color: 'var(--ink-soft)' }}>
+              <p>© {new Date().getFullYear()} AFL Painel • Todos os direitos reservados</p>
+              <p className="mt-1">Desenvolvido por <span style={{ color: 'var(--brand-strong)' }}>{'</>'} VZ</span></p>
+            </footer>
+          </div>
+        </main>
+      </div>
 
       {selectedMember && activeModalMember && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-6 sm:p-10 animate-in fade-in backdrop-blur-sm duration-300">
-           <div className="bg-[#050505] border border-white/10 w-full max-w-5xl rounded-[3rem] flex flex-col max-h-[90vh] overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.8)]">
-              <div className="p-10 lg:p-12 border-b border-white/5 flex justify-between items-start bg-gradient-to-br from-yellow-400/[0.03] to-transparent relative">
-                 <button onClick={() => setSelectedMember(null)} className="absolute top-8 right-8 text-zinc-600 hover:text-yellow-400 bg-black p-3.5 rounded-full border border-white/5 transition-all hover:scale-110 active:scale-90"><X size={24}/></button>
-                 <div className="flex items-center gap-8 w-full pr-20">
-                    <img src={activeModalMember.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeModalMember.name || activeModalMember.nome || 'User')}&background=EAB308&color=000&bold=true`} className="w-28 h-28 lg:w-32 lg:h-32 rounded-[2rem] border-2 border-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.2)]" alt="" />
-                    <div className="flex-1 min-w-0">
-                       <h2 className="text-4xl lg:text-5xl font-black uppercase italic tracking-tighter text-white leading-none truncate mb-4" title={activeModalMember.name || activeModalMember.nome}>{activeModalMember.name || activeModalMember.nome}</h2>
-                       <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-[10px] bg-yellow-400/10 inline-block px-5 py-2 rounded-xl border border-yellow-400/20">{activeModalMember.actualRole}</p>
-                    </div>
-                 </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="surface fade-up flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+            <div className="border-b p-6 sm:p-8" style={{ borderColor: 'var(--line)', background: 'linear-gradient(180deg, rgba(200,155,12,0.08), transparent)' }}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-4 sm:gap-5">
+                  <img src={activeModalMember.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeModalMember.name || activeModalMember.nome || 'User')}&background=EAB308&color=000&bold=true`} className="h-20 w-20 rounded-[24px] object-cover sm:h-24 sm:w-24" alt="" />
+                  <div className="min-w-0">
+                    <h2 className="truncate text-2xl font-semibold sm:text-3xl" title={activeModalMember.name || activeModalMember.nome}>
+                      {activeModalMember.name || activeModalMember.nome}
+                    </h2>
+                    <p className="mt-2 inline-flex rounded-full px-3 py-1 text-sm font-medium" style={{ background: 'var(--brand-soft)', color: 'var(--brand-strong)' }}>
+                      {activeModalMember.actualRole}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMember(null)}
+                  className="rounded-xl border p-2"
+                  style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}
+                >
+                  <X size={20} />
+                </button>
               </div>
-              <div className="p-10 lg:p-12 overflow-y-auto flex-1 grid grid-cols-1 lg:grid-cols-2 gap-12">
-                 <div className="space-y-5">
-                    <div className="bg-gradient-to-br from-green-500/10 to-transparent border border-green-500/20 p-10 rounded-[2.5rem] shadow-xl relative overflow-hidden group">
-                       <div className="absolute top-0 right-0 p-8 text-green-500/10 group-hover:scale-110 transition-transform duration-500"><Banknote size={100}/></div>
-                       <p className="text-[11px] text-green-500 font-black uppercase mb-3 tracking-[0.3em] italic relative z-10">SALDO A RECEBER</p>
-                       <p className="text-5xl lg:text-6xl font-mono italic text-green-400 font-black relative z-10 tracking-tighter whitespace-nowrap truncate">R$ {formatCurrency(activeModalMember.finalBalance)}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-5">
-                       <div className="bg-gradient-to-br from-blue-500/10 to-transparent border border-blue-500/20 p-6 rounded-[2rem] shadow-lg relative overflow-hidden group hover:border-blue-500/40 transition-all">
-                          <div className="absolute top-4 right-4 text-blue-500/20 group-hover:scale-110 transition-transform"><Zap size={24}/></div>
-                          <p className="text-[10px] font-black text-blue-400 mb-2 uppercase tracking-[0.2em] italic relative z-10">BÔNUS EXTRAS</p>
-                          <p className="text-xl lg:text-2xl font-mono text-blue-300 italic font-black relative z-10 whitespace-nowrap truncate">+R$ {formatCurrency(activeModalMember.bonusEarned)}</p>
-                       </div>
-                       <div className="bg-gradient-to-br from-red-500/10 to-transparent border border-red-500/20 p-6 rounded-[2rem] shadow-lg relative overflow-hidden group hover:border-red-500/40 transition-all">
-                          <div className="absolute top-4 right-4 text-red-500/20 group-hover:scale-110 transition-transform"><Banknote size={24}/></div>
-                          <p className="text-[10px] font-black text-red-400 mb-2 uppercase tracking-[0.2em] italic relative z-10">VALOR PAGO</p>
-                          <p className="text-xl lg:text-2xl font-mono text-red-300 italic font-black relative z-10 whitespace-nowrap truncate">-R$ {formatCurrency(activeModalMember.amountPaid)}</p>
-                       </div>
-                       <div className="bg-gradient-to-br from-white/[0.03] to-transparent border border-white/10 p-6 rounded-[2rem] shadow-lg relative overflow-hidden group hover:border-white/20 transition-all">
-                          <div className="absolute top-4 right-4 text-white/5 group-hover:scale-110 transition-transform"><TrendingUp size={24}/></div>
-                          <p className="text-[10px] text-zinc-500 font-black uppercase mb-2 tracking-[0.2em] italic relative z-10">BRUTO (MÊS)</p>
-                          <p className="text-xl lg:text-2xl font-mono text-white italic font-black relative z-10 tracking-tight whitespace-nowrap truncate">R$ {formatCurrency(activeModalMember.grossSales)}</p>
-                       </div>
-                       <div className="bg-gradient-to-br from-white/[0.03] to-transparent border border-white/10 p-6 rounded-[2rem] shadow-lg relative overflow-hidden group hover:border-white/20 transition-all">
-                          <div className="absolute top-4 right-4 text-white/5 group-hover:scale-110 transition-transform"><Database size={24}/></div>
-                          <p className="text-[10px] text-zinc-500 font-black uppercase mb-2 tracking-[0.2em] italic relative z-10">CAIXA (MÊS)</p>
-                          <p className="text-xl lg:text-2xl font-mono text-white italic font-black relative z-10 tracking-tight whitespace-nowrap truncate">R$ {formatCurrency(activeModalMember.totalNet)}</p>
-                       </div>
-                    </div>
-                 </div>
-                 <div className="space-y-6">
-                    <h3 className="text-xl font-black uppercase italic text-zinc-600 flex items-center gap-4 mb-8 tracking-[0.2em]"><History size={22} className="text-yellow-400"/> EXTRATO RECENTE</h3>
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 pb-10">
-                        {records.filter((r:any) => String(r.discordId) === String(activeModalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.createdAt || r.criado_em)?.startsWith(currentMonthString)).map((r: any) => (
-                          <div key={r.id} className="flex items-center bg-[#0a0a0a] p-6 rounded-[1.5rem] border border-white/5 hover:border-white/10 transition-all gap-4">
-                             <div className="min-w-0 flex-1">
-                                <div className={`font-black text-sm uppercase italic mb-1 ${r.type === 'CORRIDINHA' || r.tipo === 'CORRIDINHA' ? 'text-blue-400' : r.type === 'SAQUE' || r.tipo === 'SAQUE' ? 'text-red-400' : 'text-white'}`}>
-                                  <TooltipText text={getDisplayItemName(r)} maxWidth="220px" />
-                                </div>
-                                <p className="text-[10px] text-zinc-600 tracking-widest uppercase mt-1 italic truncate">{new Date(r.createdAt || r.criado_em).toLocaleDateString('pt-BR')} • {getDisplayClientName(r)}</p>
-                             </div>
-                             <div className="flex-shrink-0 text-right">
-                                <p className={`font-mono text-lg font-black italic whitespace-nowrap ${r.type === 'SAQUE' || r.tipo === 'SAQUE' ? 'text-red-500' : 'text-green-500'}`}>{r.type === 'SAQUE' || r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatCurrency(getGrossValue(r) || getNetValue(r) || getBonusValue(r) || getPaidValue(r))}</p>
-                             </div>
-                          </div>
-                        ))}
-                    </div>
-                 </div>
+            </div>
+
+            <div className="grid flex-1 grid-cols-1 gap-6 overflow-y-auto p-6 sm:p-8 lg:grid-cols-2">
+              <div className="space-y-4">
+                <section className="rounded-[24px] p-6" style={{ background: 'var(--success-soft)', color: 'var(--success)' }}>
+                  <p className="text-sm font-medium">Saldo a receber</p>
+                  <p className="mt-2 truncate font-mono text-4xl font-semibold sm:text-5xl">
+                    R$ {formatCurrency(activeModalMember.finalBalance)}
+                  </p>
+                </section>
+                <div className="grid grid-cols-2 gap-4">
+                  <MiniInfoCard title="Bônus extras" value={`+R$ ${formatCurrency(activeModalMember.bonusEarned)}`} tone="info" icon={<Zap size={18} />} />
+                  <MiniInfoCard title="Valor pago" value={`-R$ ${formatCurrency(activeModalMember.amountPaid)}`} tone="danger" icon={<Banknote size={18} />} />
+                  <MiniInfoCard title="Bruto (mês)" value={`R$ ${formatCurrency(activeModalMember.grossSales)}`} tone="neutral" icon={<TrendingUp size={18} />} />
+                  <MiniInfoCard title="Caixa (mês)" value={`R$ ${formatCurrency(activeModalMember.totalNet)}`} tone="neutral" icon={<Database size={18} />} />
+                </div>
               </div>
-           </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <History size={18} style={{ color: 'var(--brand-strong)' }} />
+                  <h3 className="text-lg font-semibold">Extrato recente</h3>
+                </div>
+                <div className="space-y-3">
+                  {records.filter((r:any) => String(r.discordId) === String(activeModalMember.discordId) && (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && (r.createdAt || r.criado_em)?.startsWith(currentMonthString)).map((r: any) => (
+                    <div key={r.id} className="surface-muted flex items-center gap-4 rounded-2xl border p-4" style={{ borderColor: 'var(--line)' }}>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold" style={{ color: r.type === 'CORRIDINHA' || r.tipo === 'CORRIDINHA' ? 'var(--info)' : r.type === 'SAQUE' || r.tipo === 'SAQUE' ? 'var(--danger)' : 'var(--ink)' }}>
+                          <TooltipText text={getDisplayItemName(r)} maxWidth="240px" />
+                        </div>
+                        <p className="mt-1 truncate text-sm" style={{ color: 'var(--ink-soft)' }}>
+                          {new Date(r.createdAt || r.criado_em).toLocaleDateString('pt-BR')} • {getDisplayClientName(r)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-base font-semibold" style={{ color: r.type === 'SAQUE' || r.tipo === 'SAQUE' ? 'var(--danger)' : 'var(--success)' }}>
+                          {r.type === 'SAQUE' || r.tipo === 'SAQUE' ? '-' : '+'} R$ {formatCurrency(getGrossValue(r) || getNetValue(r) || getBonusValue(r) || getPaidValue(r))}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {installmentModalData && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 p-6 animate-in zoom-in-95 duration-300">
-           <div className="bg-[#0a0a0a] border border-zinc-800 p-12 rounded-[3rem] w-full max-w-xl shadow-2xl relative">
-              <button onClick={() => setInstallmentModalData(null)} className="absolute top-8 right-8 text-zinc-600 hover:text-red-500 bg-black p-3 rounded-full border border-white/5 transition-all"><X size={24}/></button>
-              <h3 className="text-3xl font-black italic text-white uppercase tracking-tighter mb-10 text-center underline decoration-yellow-400 underline-offset-8">RECEBER PAGAMENTO</h3>
-              <form onSubmit={handleInstallmentPayment} className="space-y-8">
-                 <div className="bg-black border border-white/5 p-8 rounded-[2rem] text-center mb-4 shadow-inner">
-                    <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.3em] mb-2 italic">DEVEDOR</p>
-                    <p className="text-2xl font-black text-white italic truncate tracking-tight">{getDisplayClientName(installmentModalData)}</p>
-                 </div>
-                 <InputField label={`RECEBIDO AGORA (FALTA R$ ${formatCurrency(getGrossValue(installmentModalData) - getNetValue(installmentModalData))})`} type="number" value={installmentValue} onChange={setInstallmentValue} placeholder="R$ 0,00" />
-                 {parseFloat(installmentValue || '0') < (getGrossValue(installmentModalData) - getNetValue(installmentModalData)) && installmentValue !== '' && (
-                    <div className="p-6 bg-red-500/5 border border-red-500/20 rounded-[1.5rem] animate-in fade-in duration-300">
-                       <InputField label="NOVO VENCIMENTO" type="date" value={nextDueDate} onChange={setNextDueDate} />
-                    </div>
-                 )}
-                 <button disabled={isLoading} className={`w-full bg-green-500 text-black font-black py-6 rounded-[1.5rem] uppercase tracking-[0.3em] text-xs shadow-xl transition-all mt-4 ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-400 active:scale-95'}`}>
-                    {isLoading ? 'SINCRONIZANDO...' : 'CONFIRMAR RECEBIMENTO'}
-                 </button>
-              </form>
-           </div>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="surface fade-up relative w-full max-w-xl rounded-[28px] border p-6 sm:p-8" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+            <button
+              type="button"
+              onClick={() => setInstallmentModalData(null)}
+              className="absolute right-5 top-5 rounded-xl border p-2"
+              style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}
+            >
+              <X size={20} />
+            </button>
+            <div className="mb-6">
+              <h3 className="text-2xl font-semibold">Receber pagamento</h3>
+              <p className="mt-1 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                Registre o recebimento e, se necessário, um novo vencimento.
+              </p>
+            </div>
+            <form onSubmit={handleInstallmentPayment} className="space-y-5">
+              <div className="surface-muted rounded-2xl border p-5 text-center" style={{ borderColor: 'var(--line)' }}>
+                <p className="text-sm" style={{ color: 'var(--ink-soft)' }}>Devedor</p>
+                <p className="mt-1 text-xl font-semibold">{getDisplayClientName(installmentModalData)}</p>
+              </div>
+              <InputField
+                label={`Recebido agora (falta R$ ${formatCurrency(getGrossValue(installmentModalData) - getNetValue(installmentModalData))})`}
+                type="number"
+                value={installmentValue}
+                onChange={setInstallmentValue}
+                placeholder="R$ 0,00"
+              />
+              {parseFloat(installmentValue || '0') < (getGrossValue(installmentModalData) - getNetValue(installmentModalData)) && installmentValue !== '' && (
+                <div className="rounded-2xl border p-4 fade-up" style={{ borderColor: 'rgba(220,38,38,0.15)', background: 'var(--danger-soft)' }}>
+                  <InputField label="Novo vencimento" type="date" value={nextDueDate} onChange={setNextDueDate} />
+                </div>
+              )}
+              <button
+                disabled={isLoading}
+                className="w-full rounded-2xl px-5 py-4 text-sm font-semibold"
+                style={{ background: 'var(--success)', color: '#052814', opacity: isLoading ? 0.6 : 1 }}
+              >
+                {isLoading ? 'SINCRONIZANDO...' : 'Confirmar recebimento'}
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
       {confirmationModalData && confirmationModalData.aberto && (
-         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-6 animate-in fade-in backdrop-blur-sm duration-300">
-            <div className={`bg-[#0a0a0a] border ${confirmationModalData.tipo === 'perigo' ? 'border-red-500/30' : 'border-purple-500/30'} p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl relative text-center flex flex-col items-center animate-in zoom-in-95`}>
-               <div className={`p-5 rounded-full mb-6 ${confirmationModalData.tipo === 'perigo' ? 'bg-red-500/10 text-red-500' : 'bg-purple-500/10 text-purple-500'}`}>
-                  <AlertTriangle size={48} />
-               </div>
-               <h3 className="text-2xl font-black italic text-white uppercase tracking-tighter mb-3">{confirmationModalData.titulo}</h3>
-               <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest leading-relaxed mb-8">{confirmationModalData.mensagem}</p>
-               <div className="flex gap-4 w-full">
-                  <button onClick={() => setConfirmationModalData(null)} disabled={isLoading} className="flex-1 bg-white/5 hover:bg-white/10 text-white font-black py-4 rounded-xl uppercase tracking-widest text-[10px] transition-all">
-                     CANCELAR
-                  </button>
-                  <button onClick={confirmationModalData.acao} disabled={isLoading} className={`flex-1 font-black py-4 rounded-xl uppercase tracking-widest text-[10px] shadow-lg transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : confirmationModalData.tipo === 'perigo' ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-purple-600 text-white hover:bg-purple-500'}`}>
-                     {isLoading ? 'AGUARDE...' : 'CONFIRMAR'}
-                  </button>
-               </div>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="surface fade-up w-full max-w-md rounded-[28px] border p-6 text-center" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+            <div
+              className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+              style={{
+                background: confirmationModalData.tipo === 'perigo' ? 'var(--danger-soft)' : 'var(--warning-soft)',
+                color: confirmationModalData.tipo === 'perigo' ? 'var(--danger)' : 'var(--warning)',
+              }}
+            >
+              <AlertTriangle size={28} />
             </div>
-         </div>
+            <h3 className="text-xl font-semibold">{confirmationModalData.titulo}</h3>
+            <p className="mt-3 text-sm leading-6" style={{ color: 'var(--ink-soft)' }}>
+              {confirmationModalData.mensagem}
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmationModalData(null)}
+                disabled={isLoading}
+                className="rounded-2xl border px-4 py-3 text-sm font-semibold"
+                style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmationModalData.acao}
+                disabled={isLoading}
+                className="rounded-2xl px-4 py-3 text-sm font-semibold"
+                style={{
+                  background: confirmationModalData.tipo === 'perigo' ? 'var(--danger)' : 'var(--warning)',
+                  color: confirmationModalData.tipo === 'perigo' ? '#fff' : '#3b2a00',
+                  opacity: isLoading ? 0.6 : 1,
+                }}
+              >
+                {isLoading ? 'AGUARDE...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-
     </div>
   );
 }
 
-function SkeletonCard() { 
+function SidebarContent({
+  navItems,
+  activeTab,
+  displayUserName,
+  displayUserAvatar,
+  isAdmin,
+  onNavigate,
+}: {
+  navItems: Array<{ id: string; label: string; icon: React.ReactNode; badge?: number; onClick?: () => void }>;
+  activeTab: string;
+  displayUserName: string;
+  displayUserAvatar: string;
+  isAdmin: boolean;
+  onNavigate: (tab: string, extra?: () => void) => void;
+}) {
   return (
-    <div className="p-8 lg:p-10 rounded-[2.5rem] bg-[#0a0a0a] border border-white/5 animate-pulse relative overflow-hidden flex flex-col justify-center h-40 shadow-lg">
-      <div className="h-3 w-24 bg-white/5 rounded-full mb-6"></div>
-      <div className="h-10 w-48 bg-white/5 rounded-full"></div>
+    <>
+      <div>
+        <div className="mb-8 flex items-center gap-3">
+          <div className="brand-mark flex h-12 w-12 items-center justify-center rounded-2xl text-black">
+            <UsersRound size={20} />
+          </div>
+          <div>
+            <p className="text-base font-semibold">AFL Painel</p>
+            <p className="text-sm" style={{ color: 'var(--sidebar-muted)' }}>Gestão da equipe</p>
+          </div>
+        </div>
+
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+          <img src={displayUserAvatar} alt="" className="h-11 w-11 rounded-xl object-cover" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{displayUserName}</p>
+            <p className="text-xs" style={{ color: 'var(--sidebar-muted)' }}>{isAdmin ? 'Administrador' : 'Agente AFL'}</p>
+          </div>
+        </div>
+
+        <nav className="space-y-2">
+          {navItems.map((item) => (
+            <NavItem
+              key={item.id}
+              icon={item.icon}
+              label={item.label}
+              active={activeTab === item.id}
+              badge={item.badge}
+              onClick={() => onNavigate(item.id, item.onClick)}
+            />
+          ))}
+        </nav>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => signOut()}
+        className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium transition-colors hover:bg-white/10"
+      >
+        <LogOut size={16} />
+        Desconectar
+      </button>
+    </>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="surface animate-pulse rounded-[var(--radius-md)] border p-6" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+      <div className="mb-4 h-4 w-24 rounded-full" style={{ background: 'var(--bg-muted)' }} />
+      <div className="h-10 w-40 rounded-full" style={{ background: 'var(--bg-muted)' }} />
     </div>
-  ); 
+  );
+}
+
+function MetricRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span style={{ color: 'var(--ink-soft)' }}>{label}</span>
+      <span className="font-mono font-semibold" style={{ color: valueColor || 'var(--ink)' }}>{value}</span>
+    </div>
+  );
 }
 
 interface StatCardProps {
@@ -1167,17 +1561,26 @@ interface StatCardProps {
   highlight?: boolean;
 }
 
-function StatCard({ title, value, icon, type = "number", highlight = false }: StatCardProps) { 
-  const displayValue = type === 'money' ? `R$ ${formatCurrency(value)}` : value; 
+function StatCard({ title, value, icon, type = "number", highlight = false }: StatCardProps) {
+  const displayValue = type === 'money' ? `R$ ${formatCurrency(value)}` : value;
   return (
-    <div className={`p-8 lg:p-10 rounded-[2rem] lg:rounded-[2.5rem] relative overflow-hidden transition-all shadow-xl border ${highlight ? 'bg-gradient-to-br from-[#1a1400] to-[#0a0a0a] border-yellow-500/30' : 'bg-[#0a0a0a] border-white/5 hover:border-white/10'}`}>
-      <div className="relative z-10">
-        <p className={`text-[10px] font-black uppercase tracking-[0.3em] mb-4 italic ${highlight ? 'text-yellow-500' : 'text-zinc-600'}`}>{title}</p>
-        <h3 className={`text-4xl lg:text-5xl font-black italic tracking-tighter ${highlight ? 'text-yellow-500' : 'text-white'}`}>{displayValue}</h3>
+    <div
+      className="surface rounded-[var(--radius-md)] border p-6"
+      style={{
+        borderColor: highlight ? 'rgba(200,155,12,0.24)' : 'var(--line)',
+        boxShadow: 'var(--shadow-md)',
+        background: highlight ? 'linear-gradient(180deg, rgba(200,155,12,0.10), var(--bg-elevated))' : 'var(--bg-elevated)',
+      }}
+    >
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <p className="text-sm font-medium" style={{ color: highlight ? 'var(--brand-strong)' : 'var(--ink-soft)' }}>{title}</p>
+        <div style={{ color: highlight ? 'var(--brand-strong)' : 'var(--ink-faint)' }}>{icon}</div>
       </div>
-      <div className={`absolute top-8 right-8 transition-all ${highlight ? 'text-yellow-500/10' : 'text-white/5'}`}>{icon}</div>
+      <h3 className="truncate text-3xl font-semibold sm:text-4xl" style={{ color: highlight ? 'var(--brand-strong)' : 'var(--ink)' }}>
+        {displayValue}
+      </h3>
     </div>
-  ); 
+  );
 }
 
 interface NavItemProps {
@@ -1185,16 +1588,34 @@ interface NavItemProps {
   label: string;
   active: boolean;
   onClick: () => void;
-  color?: string;
+  badge?: number;
 }
 
-function NavItem({ icon, label, active, onClick, color = "text-zinc-600" }: NavItemProps) { 
+function NavItem({ icon, label, active, onClick, badge }: NavItemProps) {
   return (
-    <button onClick={onClick} className={`w-full flex items-center gap-4 px-5 py-4 rounded-[1.2rem] transition-all duration-300 ${active ? 'bg-yellow-400 text-black shadow-[0_10px_20px_rgba(250,204,21,0.2)]' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
-      <span className={active ? 'text-black' : color}>{icon}</span>
-      <span className="font-black tracking-[0.2em] text-[10px] uppercase">{label}</span>
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition-colors"
+      style={active ? {
+        background: 'rgba(200,155,12,0.16)',
+        color: 'var(--sidebar-ink)',
+      } : {
+        background: 'transparent',
+        color: 'var(--sidebar-muted)',
+      }}
+    >
+      <div className="flex items-center gap-3">
+        <span style={{ color: active ? '#f2d062' : 'var(--sidebar-muted)' }}>{icon}</span>
+        <span className="text-sm font-medium">{label}</span>
+      </div>
+      {badge ? (
+        <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: '#fff', color: '#111' }}>
+          {badge}
+        </span>
+      ) : null}
     </button>
-  ); 
+  );
 }
 
 interface InputFieldProps {
@@ -1206,11 +1627,133 @@ interface InputFieldProps {
   required?: boolean;
 }
 
-function InputField({ label, value, onChange, placeholder, type = "text", required = true }: InputFieldProps) { 
+function InputField({ label, value, onChange, placeholder, type = "text", required = true }: InputFieldProps) {
   return (
-    <div className="space-y-3">
-      <label className="text-[10px] font-black text-zinc-500 uppercase ml-4 tracking-[0.2em] italic">{label}</label>
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-yellow-400 font-black text-sm transition-all placeholder:text-zinc-800 shadow-inner" placeholder={placeholder} required={required} />
+    <div className="space-y-2">
+      <label className="block text-sm font-medium">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full rounded-2xl border px-4 py-3 outline-none transition-colors"
+        style={{ background: 'var(--bg)', borderColor: 'var(--line)', color: 'var(--ink)' }}
+        placeholder={placeholder}
+        required={required}
+      />
     </div>
-  ); 
+  );
+}
+
+function SearchField({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
+  return (
+    <div className="relative">
+      <Search className="absolute left-4 top-1/2 -translate-y-1/2" size={18} style={{ color: 'var(--ink-soft)' }} />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-2xl border py-3 pl-11 pr-4 outline-none transition-colors"
+        style={{ background: 'var(--bg-elevated)', borderColor: 'var(--line)', color: 'var(--ink)' }}
+      />
+    </div>
+  );
+}
+
+function DataTableCard({ children }: { children: React.ReactNode }) {
+  return (
+    <section className="surface overflow-hidden rounded-[var(--radius-md)] border" style={{ borderColor: 'var(--line)', boxShadow: 'var(--shadow-md)' }}>
+      <div className="overflow-x-auto">{children}</div>
+    </section>
+  );
+}
+
+function LoadMoreFooter({
+  currentLength,
+  limit,
+  onClick,
+  emptyText,
+}: {
+  currentLength: number;
+  limit: number;
+  onClick: () => void;
+  emptyText: string;
+}) {
+  if (currentLength === 0) {
+    return <div className="p-8 text-center text-sm" style={{ color: 'var(--ink-soft)' }}>{emptyText}</div>;
+  }
+  if (currentLength <= limit) return null;
+  return (
+    <div className="border-t p-4 text-center" style={{ borderColor: 'var(--line)' }}>
+      <button type="button" onClick={onClick} className="inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-medium" style={{ borderColor: 'var(--line)' }}>
+        Carregar mais <ChevronDown size={16} />
+      </button>
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="col-span-full rounded-[var(--radius-md)] border border-dashed p-12 text-center text-sm" style={{ borderColor: 'var(--line)', color: 'var(--ink-soft)' }}>
+      {text}
+    </div>
+  );
+}
+
+function TypeBadge({ type }: { type: string }) {
+  const normalizedType = type?.toUpperCase();
+  const tone = normalizedType === 'SAQUE'
+    ? { background: 'var(--danger-soft)', color: 'var(--danger)' }
+    : normalizedType === 'CORRIDINHA'
+      ? { background: 'var(--info-soft)', color: 'var(--info)' }
+      : { background: 'var(--brand-soft)', color: 'var(--brand-strong)' };
+
+  return (
+    <span className="rounded-full px-3 py-1 text-xs font-semibold" style={tone}>
+      {type}
+    </span>
+  );
+}
+
+function StatMiniCard({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div
+      className="surface rounded-[var(--radius-md)] border p-5"
+      style={{
+        borderColor: highlight ? 'rgba(34,197,94,0.18)' : 'var(--line)',
+        boxShadow: 'var(--shadow-md)',
+      }}
+    >
+      <p className="text-sm font-medium" style={{ color: highlight ? 'var(--success)' : 'var(--ink-soft)' }}>{label}</p>
+      <p className="mt-2 font-mono text-xl font-semibold" style={{ color: highlight ? 'var(--success)' : 'var(--ink)' }}>{value}</p>
+    </div>
+  );
+}
+
+function MiniInfoCard({
+  title,
+  value,
+  tone,
+  icon,
+}: {
+  title: string;
+  value: string;
+  tone: 'info' | 'danger' | 'neutral';
+  icon: React.ReactNode;
+}) {
+  const toneMap = {
+    info: { background: 'var(--info-soft)', color: 'var(--info)' },
+    danger: { background: 'var(--danger-soft)', color: 'var(--danger)' },
+    neutral: { background: 'var(--bg-muted)', color: 'var(--ink)' },
+  }[tone];
+
+  return (
+    <div className="rounded-2xl p-4" style={toneMap}>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="text-sm font-medium">{title}</p>
+        <span>{icon}</span>
+      </div>
+      <p className="truncate font-mono text-lg font-semibold">{value}</p>
+    </div>
+  );
 }
