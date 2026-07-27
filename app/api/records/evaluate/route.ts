@@ -13,7 +13,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Não autorizado.' }, { status: 403 });
     }
 
-    const { recordId, action, evaluatedBy } = await req.json();
+    const { recordId, action } = await req.json();
+    if (!recordId || !action) {
+      return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 });
+    }
+
+    const evaluatedBy =
+      (access.session as { user?: { name?: string; id?: string } }).user?.name ||
+      (access.session as { user?: { id?: string } }).user?.id ||
+      'Sistema';
+
     await recordService.evaluateRecord(recordId, action, evaluatedBy);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

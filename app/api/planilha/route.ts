@@ -24,8 +24,15 @@ const getDisplayClientName = (record: any) => {
   return (record.client && record.client !== 'N/A') ? record.client : (record.cliente && record.cliente !== 'N/A') ? record.cliente : 'SISTEMA';
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authHeader = request.headers.get('authorization');
+    const expectedToken = process.env.INTEGRATION_SECRET_TOKEN;
+
+    if (!expectedToken || authHeader !== `Bearer ${expectedToken}`) {
+      return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+    }
+
     const members = await prisma.member.findMany();
     const records = await prisma.record.findMany({
       where: {

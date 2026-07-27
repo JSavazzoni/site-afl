@@ -10,17 +10,16 @@ const adminService = new AdminService();
 function isAuthorized(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
-    // Sem segredo configurado, ainda permite em desenvolvimento local.
+    // Produção sem segredo = fechado. Dev local pode rodar sem CRON_SECRET.
     return process.env.NODE_ENV !== 'production';
   }
 
   const authHeader = req.headers.get('authorization') || '';
   const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
   const headerSecret = req.headers.get('x-cron-secret') || '';
-  const url = new URL(req.url);
-  const querySecret = url.searchParams.get('secret') || '';
 
-  return bearer === cronSecret || headerSecret === cronSecret || querySecret === cronSecret;
+  // Nunca aceitar segredo em query string (vaza em logs/histórico).
+  return bearer === cronSecret || headerSecret === cronSecret;
 }
 
 async function run(req: Request) {
@@ -44,7 +43,7 @@ async function run(req: Request) {
   });
 }
 
-/** Vercel Cron / agendadores: diário 03:00 UTC (= 00:00 Brasília). A virada só altera dados se ainda houver mês anterior aprovado. */
+/** Vercel Cron / agendadores: diário 03:00 UTC (= 00:00 Brasília). */
 export async function GET(req: Request) {
   try {
     return await run(req);

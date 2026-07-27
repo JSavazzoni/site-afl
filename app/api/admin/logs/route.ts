@@ -14,6 +14,10 @@ export async function DELETE(req: Request) {
     }
 
     const { id } = await req.json();
+    if (!id || typeof id !== 'string' || id.length > 64) {
+      return NextResponse.json({ error: 'ID inválido.' }, { status: 400 });
+    }
+
     await adminService.deleteLog(id);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
