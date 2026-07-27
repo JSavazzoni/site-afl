@@ -43,7 +43,16 @@ const isInstallmentPayment = (itemName: string) => {
   return (itemName || '').toUpperCase().includes('PAGAMENTO DE PARCELA');
 };
 
-const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(res => res.json());
+const fetcher = async (url: string) => {
+  const res = await fetch(url, { cache: 'no-store' });
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data?.error || 'Falha ao carregar dados.');
+  }
+
+  return data;
+};
 
 const getCashbackPercentage = (role: string) => { 
   const rates: Record<string, number> = { 
@@ -64,10 +73,12 @@ const TooltipText = ({ text, maxWidth = "150px" }: { text: string, maxWidth?: st
   </div>
 );
 
-export default function Dashboard({ initialIsAdmin, userSession }: any) {
+export default function Dashboard({ initialPermissions, userSession }: any) {
   const [activeTab, setActiveTab] = useState('inicio');
   const [selectedRole, setSelectedRole] = useState('Todos');
-  const isAdmin = initialIsAdmin;
+  const isAdmin = Boolean(initialPermissions?.isAdmin);
+  const canPostSales = Boolean(initialPermissions?.canPostSales);
+  const canApproveRecords = Boolean(initialPermissions?.canApproveRecords);
   const [isLoading, setIsLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   
@@ -133,6 +144,7 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
   const loggedInMember = useMemo(() => teamMembers.find((m: any) => String(m.discordId) === String(userSession?.user?.id)), [teamMembers, userSession]);
   const displayUserName = loggedInMember?.nome || loggedInMember?.name || userSession?.user?.name || 'Agente';
   const displayUserAvatar = loggedInMember?.avatar || userSession?.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayUserName)}&background=EAB308&color=000&bold=true`;
+  const canSelectAnySeller = isAdmin;
 
   const dashboardMesAtual = useMemo(() => records.filter((r: any) => 
     (r.status === 'APROVADO' || r.status === 'ARQUIVADO') && 
@@ -314,6 +326,20 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
   const parsedReceivedValue = formData.receivedAmount !== '' ? parseFloat(formData.receivedAmount.replace(',', '.')) : parsedTotalValue;
   const requireDueDate = parsedReceivedValue < parsedTotalValue; 
 
+  useEffect(() => {
+    if (!canPostSales) return;
+
+    if (loggedInMember?.discordId && !canSelectAnySeller) {
+      setFormData((current) => ({
+        ...current,
+        vendorId: String(loggedInMember.discordId),
+        recruitedId: String(loggedInMember.discordId),
+        memberWithdrawalId: String(loggedInMember.discordId),
+        type: 'VENDA',
+      }));
+    }
+  }, [canPostSales, canSelectAnySeller, loggedInMember]);
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
@@ -343,11 +369,27 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
         body: JSON.stringify(payload) 
       });
 
-      if (response.ok) { 
-        setFormData({ type: 'VENDA', vendorId: '', client: '', item: '', amount: '', receivedAmount: '', recruitedId: '', dueDate: '', memberWithdrawalId: '' }); 
-        displayToast("REGISTRO POSTADO COM SUCESSO!"); 
-        await forceDataSync(); 
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result?.error || 'Falha ao postar registro.');
       }
+
+      setFormData({
+        type: 'VENDA',
+        vendorId: canSelectAnySeller ? '' : String(loggedInMember?.discordId || ''),
+        client: '',
+        item: '',
+        amount: '',
+        receivedAmount: '',
+        recruitedId: canSelectAnySeller ? '' : String(loggedInMember?.discordId || ''),
+        dueDate: '',
+        memberWithdrawalId: canSelectAnySeller ? '' : String(loggedInMember?.discordId || ''),
+      });
+      displayToast("REGISTRO POSTADO COM SUCESSO!");
+      await forceDataSync();
+    } catch (error: any) {
+      displayToast(error?.message || 'Falha ao postar registro.');
     } finally {
       setIsLoading(false);
     }
@@ -358,12 +400,19 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
     setIsLoading(true);
     
     try {
-      await fetch('/api/records/evaluate', { 
+      const response = await fetch('/api/records/evaluate', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ recordId: id, action: action, evaluatedBy: displayUserName }) 
       });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Falha ao avaliar registro.');
+      }
       await forceDataSync(); 
+      displayToast(action === 'APROVAR' ? 'REGISTRO APROVADO!' : 'REGISTRO REPROVADO!');
+    } catch (error: any) {
+      displayToast(error?.message || 'Falha ao avaliar registro.');
     } finally {
       setIsLoading(false);
     }
@@ -372,13 +421,20 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
   const executeDeleteLog = async (id: string) => {
     setIsLoading(true); 
     try {
-      await fetch('/api/admin/logs', { 
+      const response = await fetch('/api/admin/logs', { 
         method: 'DELETE', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ id }) 
       }); 
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Falha ao excluir registro.');
+      }
       await forceDataSync(); 
       setConfirmationModalData(null); 
+      displayToast('REGISTRO EXCLUÍDO!');
+    } catch (error: any) {
+      displayToast(error?.message || 'Falha ao excluir registro.');
     } finally {
       setIsLoading(false); 
     }
@@ -397,10 +453,16 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
   const executeMonthRollover = async () => {
     setIsLoading(true); 
     try {
-      await fetch('/api/admin/rollover', { method: 'POST' }); 
+      const response = await fetch('/api/admin/rollover', { method: 'POST' }); 
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Falha ao executar virada.');
+      }
       displayToast("MÊS FECHADO!"); 
       await forceDataSync(); 
       setConfirmationModalData(null); 
+    } catch (error: any) {
+      displayToast(error?.message || 'Falha ao executar virada.');
     } finally {
       setIsLoading(false); 
     }
@@ -419,10 +481,16 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
   const executeSystemRestore = async () => {
     setIsLoading(true); 
     try {
-      await fetch('/api/admin/audit'); 
+      const response = await fetch('/api/admin/audit'); 
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Falha ao restaurar sistema.');
+      }
       displayToast("SISTEMA RESTAURADO!"); 
       await forceDataSync(); 
       setConfirmationModalData(null); 
+    } catch (error: any) {
+      displayToast(error?.message || 'Falha ao restaurar sistema.');
     } finally {
       setIsLoading(false); 
     }
@@ -446,14 +514,21 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
     const parsedPayment = parseFloat(installmentValue.replace(',', '.')) || 0;
     
     try {
-      await fetch('/api/records/installment', { 
+      const response = await fetch('/api/records/installment', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ recordId: installmentModalData.id, paidAmount: parsedPayment, nextDueDate: nextDueDate }) 
       });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Falha ao registrar pagamento.');
+      }
       setInstallmentModalData(null); 
       setInstallmentValue(''); 
       await forceDataSync();
+      displayToast('PAGAMENTO REGISTRADO!');
+    } catch (error: any) {
+      displayToast(error?.message || 'Falha ao registrar pagamento.');
     } finally {
       setIsLoading(false);
     }
@@ -485,22 +560,32 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
           <NavItem label="EFETIVO" icon={<Users size={18}/>} active={activeTab === 'equipe'} onClick={() => setActiveTab('equipe')} />
           <NavItem label="MURAL" icon={<History size={18}/>} active={activeTab === 'gestao'} onClick={() => { setActiveTab('gestao'); setMuralPaginationLimit(20); }} />
           
-          {isAdmin && (
+          {(canPostSales || canApproveRecords || isAdmin) && (
             <div className="pt-6 mt-6 border-t border-white/5 space-y-2">
-              <NavItem label="POSTAR" icon={<PlusCircle size={18}/>} active={activeTab === 'registrar'} onClick={() => setActiveTab('registrar')} color="text-yellow-400" />
+              {canPostSales && (
+                <NavItem label="POSTAR" icon={<PlusCircle size={18}/>} active={activeTab === 'registrar'} onClick={() => setActiveTab('registrar')} color="text-yellow-400" />
+              )}
               
-              <button onClick={() => setActiveTab('pendencias')} className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all ${activeTab === 'pendencias' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
-                <div className="flex items-center gap-4"><Clock size={18}/> <span className="font-black text-[11px] tracking-widest uppercase">PENDÊNCIAS</span></div>
-                {pendingInstallments.length > 0 && <span className="bg-red-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-lg shadow-red-600/40 animate-pulse">{pendingInstallments.length}</span>}
-              </button>
+              {isAdmin && (
+                <button onClick={() => setActiveTab('pendencias')} className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all ${activeTab === 'pendencias' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
+                  <div className="flex items-center gap-4"><Clock size={18}/> <span className="font-black text-[11px] tracking-widest uppercase">PENDÊNCIAS</span></div>
+                  {pendingInstallments.length > 0 && <span className="bg-red-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-lg shadow-red-600/40 animate-pulse">{pendingInstallments.length}</span>}
+                </button>
+              )}
               
-              <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all ${activeTab === 'admin' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
-                <div className="flex items-center gap-4"><ShieldCheck size={18}/> <span className="font-black text-[11px] tracking-widest uppercase text-yellow-400">APROVAÇÕES</span></div>
-                {pendingRecords.length > 0 && <span className="bg-yellow-400 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-lg shadow-yellow-400/20">{pendingRecords.length}</span>}
-              </button>
+              {canApproveRecords && (
+                <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all ${activeTab === 'admin' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 shadow-sm' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
+                  <div className="flex items-center gap-4"><ShieldCheck size={18}/> <span className="font-black text-[11px] tracking-widest uppercase text-yellow-400">APROVAÇÕES</span></div>
+                  {pendingRecords.length > 0 && <span className="bg-yellow-400 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-lg shadow-yellow-400/20">{pendingRecords.length}</span>}
+                </button>
+              )}
               
-              <NavItem label="ADMINISTRAÇÃO" icon={<ShieldAlert size={18}/>} active={activeTab === 'admin_zone'} onClick={() => { setActiveTab('admin_zone'); setLogPaginationLimit(20); }} color="text-red-500" />
-              <NavItem label="HISTÓRICO" icon={<Archive size={18}/>} active={activeTab === 'historico_backup'} onClick={() => { setActiveTab('historico_backup'); setHistoryPaginationLimit(20); }} color="text-zinc-400" />
+              {isAdmin && (
+                <>
+                  <NavItem label="ADMINISTRAÇÃO" icon={<ShieldAlert size={18}/>} active={activeTab === 'admin_zone'} onClick={() => { setActiveTab('admin_zone'); setLogPaginationLimit(20); }} color="text-red-500" />
+                  <NavItem label="HISTÓRICO" icon={<Archive size={18}/>} active={activeTab === 'historico_backup'} onClick={() => { setActiveTab('historico_backup'); setHistoryPaginationLimit(20); }} color="text-zinc-400" />
+                </>
+              )}
             </div>
           )}
         </nav>
@@ -684,13 +769,12 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
                      </div>
                   )}
 
-                  {activeTab === 'registrar' && (
+                  {activeTab === 'registrar' && canPostSales && (
                      <div className="max-w-3xl mx-auto animate-in zoom-in-95 duration-300">
                        <div className="flex gap-2 p-1.5 bg-[#0a0a0a] rounded-[1.5rem] mb-8 border border-white/5 shadow-lg">
                          {[
-                           {id:'VENDA', label:'VENDA', icon:<ShoppingCart size={16}/>}, 
-                           {id:'CORRIDINHA', label:'BÔNUS', icon:<Zap size={16}/>}, 
-                           {id:'SAQUE', label:'PAGAMENTO', icon:<Banknote size={16}/>}
+                           {id:'VENDA', label:'VENDA', icon:<ShoppingCart size={16}/>},
+                           ...(isAdmin ? [{id:'CORRIDINHA', label:'BÔNUS', icon:<Zap size={16}/>}, {id:'SAQUE', label:'PAGAMENTO', icon:<Banknote size={16}/>}] : [])
                          ].map(typeConfig => (
                            <button key={typeConfig.id} onClick={() => setFormData({...formData, type: typeConfig.id})} className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-[11px] font-black tracking-[0.2em] transition-all ${formData.type === typeConfig.id ? 'bg-yellow-400 text-black shadow-md' : 'text-zinc-600 hover:text-white'}`}>
                              {typeConfig.icon}{typeConfig.label}
@@ -700,10 +784,15 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
                        <form onSubmit={handleFormSubmit} className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl space-y-6">
                          <div className="space-y-3">
                            <label className="text-[11px] uppercase text-yellow-400 font-black tracking-widest ml-3">AGENTE RESPONSÁVEL</label>
-                           <select value={formData.vendorId || formData.recruitedId || formData.memberWithdrawalId} onChange={e => setFormData({...formData, vendorId: e.target.value, recruitedId: e.target.value, memberWithdrawalId: e.target.value})} className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-yellow-400 font-black uppercase text-sm appearance-none cursor-pointer shadow-inner" required>
+                           <select value={formData.vendorId || formData.recruitedId || formData.memberWithdrawalId} onChange={e => setFormData({...formData, vendorId: e.target.value, recruitedId: e.target.value, memberWithdrawalId: e.target.value})} disabled={!canSelectAnySeller} className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-yellow-400 font-black uppercase text-sm appearance-none cursor-pointer shadow-inner disabled:cursor-not-allowed disabled:opacity-70" required>
                              <option value="">Selecione na equipe...</option>
                              {activeTeam.map((member: any) => <option key={member.discordId} value={member.discordId}>{member.name || member.nome} ({member.actualRole})</option>)}
                            </select>
+                           {!canSelectAnySeller && (
+                             <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] ml-3">
+                               Sua venda sera postada no seu proprio nome e ficara pendente para aprovacao do master.
+                             </p>
+                           )}
                          </div>
                          
                          {formData.type === 'VENDA' && (
@@ -741,7 +830,7 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
                      </div>
                   )}
 
-                  {activeTab === 'pendencias' && (
+                  {activeTab === 'pendencias' && isAdmin && (
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
                        {pendingInstallments.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Nenhuma cobrança ativa</p></div>}
                        {pendingInstallments.map((record: any) => (
@@ -769,7 +858,7 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
                      </div>
                   )}
 
-                  {activeTab === 'admin' && (
+                  {activeTab === 'admin' && canApproveRecords && (
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
                        {pendingRecords.length === 0 && <div className="col-span-full py-32 text-center"><p className="text-zinc-700 font-black uppercase text-lg tracking-[0.4em] italic">Fila limpa</p></div>}
                        {pendingRecords.map((record: any) => (
@@ -798,7 +887,7 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
                      </div>
                   )}
 
-                  {activeTab === 'admin_zone' && (
+                  {activeTab === 'admin_zone' && isAdmin && (
                      <div className="space-y-10 animate-in fade-in duration-500">
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                          <div className="bg-red-500/5 border border-red-500/20 p-10 rounded-[2.5rem] shadow-lg relative overflow-hidden group">
@@ -866,7 +955,7 @@ export default function Dashboard({ initialIsAdmin, userSession }: any) {
                      </div>
                   )}
 
-                  {activeTab === 'historico_backup' && (
+                  {activeTab === 'historico_backup' && isAdmin && (
                      <div className="space-y-8 animate-in fade-in duration-500">
                        <div className="flex flex-col md:flex-row md:items-center gap-6 bg-[#0a0a0a] p-8 rounded-[2.5rem] border border-white/5 shadow-lg">
                          <div className="flex-1">

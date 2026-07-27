@@ -1,30 +1,16 @@
 import { NextResponse } from 'next/server';
+import { getCurrentAccess, resolveHighestRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
-const resolveHighestRole = (discordRoles: string[]) => {
-  const hierarchy = [
-    { id: process.env.ROLE_RESP_VENDAS, name: "Resp.Vendas" },
-    { id: process.env.ROLE_MASTER, name: "Master AFL" },
-    { id: process.env.ROLE_RESP_AFL, name: "Resp.AFL" },
-    { id: process.env.ROLE_AUXILIAR, name: "Auxiliar AFL" },
-    { id: process.env.ROLE_LIDER, name: "Lider AFL" },
-    { id: process.env.ROLE_SUB_LIDER, name: "Sub-Lider AFL" },
-    { id: process.env.ROLE_MEMBRO, name: "Membro AFL" }
-  ];
-
-  for (const role of hierarchy) {
-    if (role.id && discordRoles.includes(role.id)) {
-      return role.name;
-    }
-  }
-  
-  return null;
-};
-
 export async function GET() {
   try {
+    const access = await getCurrentAccess();
+    if (!access.session || !access.isPanelMember) {
+      return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+    }
+
     const members = await prisma.member.findMany();
     const token = process.env.DISCORD_BOT_TOKEN;
     const guild = process.env.DISCORD_GUILD_ID;
@@ -131,6 +117,11 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const access = await getCurrentAccess();
+    if (!access.session || !access.isAdmin) {
+      return NextResponse.json({ error: 'Não autorizado.' }, { status: 403 });
+    }
+
     const payload = await req.json();
     const result = await prisma.member.upsert({
       where: { discordId: payload.discordId },
