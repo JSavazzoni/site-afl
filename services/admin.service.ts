@@ -1,8 +1,23 @@
 import { RecordRepository } from '@/repositories/record.repository';
 import { MemberRepository } from '@/repositories/member.repository';
 import { getBrasiliaMonthKey, getBrasiliaMonthStartUtc } from '@/lib/brasilia';
-import { computeCashbackCarryAmount, isInstallmentPayment, roundMoney } from '@/lib/finance';
+import {
+  computeCashbackCarryAmount,
+  computeMissingCashbackBalance,
+  isInstallmentPayment,
+  roundMoney,
+} from '@/lib/finance';
 import { prisma } from '@/lib/prisma';
+
+type CarryForwardDraft = {
+  discordId: string;
+  name: string;
+  type: 'CORRIDINHA' | 'SAQUE';
+  item: string;
+  amount: number;
+  receivedAmount: number;
+  extraCashback: number;
+};
 
 export class AdminService {
   private recordRepository: RecordRepository;
@@ -16,6 +31,58 @@ export class AdminService {
   async deleteLog(id: string) {
     if (!id) throw new Error('InvalidId');
     return this.recordRepository.delete(id);
+  }
+
+  private buildCarryDraft(
+    discordId: string,
+    name: string,
+    amount: number,
+  ): CarryForwardDraft | null {
+    if (amount > 0.01) {
+      return {
+        discordId,
+        name,
+        type: 'CORRIDINHA',
+        item: 'SALDO RETIDO (MÊS ANTERIOR)',
+        amount: 0,
+        receivedAmount: 0,
+        extraCashback: roundMoney(amount),
+      };
+    }
+
+    if (amount < -0.01) {
+      return {
+        discordId,
+        name,
+        type: 'SAQUE',
+        item: 'DÍVIDA RETIDA (MÊS ANTERIOR)',
+        amount: roundMoney(Math.abs(amount)),
+        receivedAmount: 0,
+        extraCashback: 0,
+      };
+    }
+
+    return null;
+  }
+
+  private async createCarryForwards(carryForwards: CarryForwardDraft[], evaluatedBy: string) {
+    for (const carry of carryForwards) {
+      await prisma.record.create({
+        data: {
+          discordId: carry.discordId,
+          name: carry.name,
+          type: carry.type,
+          item: carry.item,
+          client: 'SISTEMA AFL',
+          amount: carry.amount,
+          receivedAmount: carry.receivedAmount,
+          extraCashback: carry.extraCashback,
+          status: 'APROVADO',
+          createdBy: 'Sistema',
+          evaluatedBy,
+        },
+      });
+    }
   }
 
   /**
@@ -33,15 +100,7 @@ export class AdminService {
       where: { status: 'APROVADO' },
     });
 
-    const carryForwards: Array<{
-      discordId: string;
-      name: string;
-      type: 'CORRIDINHA' | 'SAQUE';
-      item: string;
-      amount: number;
-      receivedAmount: number;
-      extraCashback: number;
-    }> = [];
+    const carryForwards: CarryForwardDraft[] = [];
 
     for (const member of members) {
       if (!member.discordId) continue;
@@ -53,50 +112,12 @@ export class AdminService {
 
       const role = member.panelRole || member.role || 'Membro AFL';
       const carry = computeCashbackCarryAmount(memberRecords, role, monthStartUtc, monthKey);
-
-      if (carry > 0.01) {
-        carryForwards.push({
-          discordId: member.discordId,
-          name: member.name,
-          type: 'CORRIDINHA',
-          item: 'SALDO RETIDO (MÊS ANTERIOR)',
-          amount: 0,
-          receivedAmount: 0,
-          extraCashback: roundMoney(carry),
-        });
-      } else if (carry < -0.01) {
-        carryForwards.push({
-          discordId: member.discordId,
-          name: member.name,
-          type: 'SAQUE',
-          item: 'DÍVIDA RETIDA (MÊS ANTERIOR)',
-          amount: roundMoney(Math.abs(carry)),
-          receivedAmount: 0,
-          extraCashback: 0,
-        });
-      }
+      const draft = this.buildCarryDraft(member.discordId, member.name, carry);
+      if (draft) carryForwards.push(draft);
     }
 
     const archived = await this.recordRepository.archiveBefore(monthStartUtc);
-
-    for (const carry of carryForwards) {
-      await prisma.record.create({
-        data: {
-          discordId: carry.discordId,
-          name: carry.name,
-          type: carry.type,
-          item: carry.item,
-          client: 'SISTEMA AFL',
-          amount: carry.amount,
-          receivedAmount: carry.receivedAmount,
-          extraCashback: carry.extraCashback,
-          status: 'APROVADO',
-          createdBy: 'Sistema',
-          evaluatedBy: 'Virada de mês',
-        },
-      });
-    }
-
+    await this.createCarryForwards(carryForwards, 'Virada de mês');
     await this.rebuildMemberCountersFromApproved();
 
     return {
@@ -104,6 +125,47 @@ export class AdminService {
       monthStartUtc: monthStartUtc.toISOString(),
       archivedCount: archived.count,
       carryForwardCount: carryForwards.length,
+    };
+  }
+
+  /**
+   * Repara saldos zerados por viradas antigas (sem SALDO RETIDO).
+   * Idempotente: compara histórico econômico com saldo ativo e só cria o que falta.
+   */
+  async repairWipedCashbackBalances(now: Date = new Date()) {
+    const monthKey = getBrasiliaMonthKey(now);
+    const members = await this.memberRepository.findAll();
+    const records = await prisma.record.findMany({
+      where: { status: { in: ['APROVADO', 'ARQUIVADO'] } },
+    });
+
+    const carryForwards: CarryForwardDraft[] = [];
+    let repairedAmount = 0;
+
+    for (const member of members) {
+      if (!member.discordId) continue;
+
+      const memberRecords = records.filter(
+        (record) => String(record.discordId) === String(member.discordId),
+      );
+      if (memberRecords.length === 0) continue;
+
+      const role = member.panelRole || member.role || 'Membro AFL';
+      const missing = computeMissingCashbackBalance(memberRecords, role, monthKey);
+      const draft = this.buildCarryDraft(member.discordId, member.name, missing);
+      if (!draft) continue;
+
+      carryForwards.push(draft);
+      repairedAmount = roundMoney(repairedAmount + missing);
+    }
+
+    await this.createCarryForwards(carryForwards, 'Reparo de cashback');
+    await this.rebuildMemberCountersFromApproved();
+
+    return {
+      monthKey,
+      repairedMembers: carryForwards.length,
+      repairedAmount,
     };
   }
 

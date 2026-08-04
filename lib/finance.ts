@@ -288,6 +288,46 @@ export function computeCashbackCarryAmount(
   return roundMoney(totalBalance - keepingBalance);
 }
 
+export function isCarryForwardItem(itemName?: string | null) {
+  const name = String(itemName || "").toUpperCase();
+  return name.includes("SALDO RETIDO") || name.includes("DÍVIDA RETIDA");
+}
+
+/**
+ * Saldo econômico real (vendas/bônus/saques), ignorando lançamentos de virada.
+ * Inclui ARQUIVADO para recuperar o que a virada antiga zerou sem SALDO RETIDO.
+ */
+export function computeLifetimeCashbackBalance(
+  memberRecords: FinanceRecord[],
+  role: string,
+  currentMonthString: string,
+) {
+  const historical = memberRecords
+    .filter((record) => record.status === "APROVADO" || record.status === "ARQUIVADO")
+    .filter((record) => !isCarryForwardItem(record.item))
+    .map((record) => ({ ...record, status: "APROVADO" }));
+
+  return computeMemberFinance(historical, role, currentMonthString).finalBalance;
+}
+
+/**
+ * Diferença entre o saldo que deveria existir e o saldo ativo atual.
+ * Positivo = falta criar SALDO RETIDO; negativo = DÍVIDA RETIDA.
+ */
+export function computeMissingCashbackBalance(
+  memberRecords: FinanceRecord[],
+  role: string,
+  currentMonthString: string,
+) {
+  const lifetime = computeLifetimeCashbackBalance(memberRecords, role, currentMonthString);
+  const current = computeMemberFinance(
+    memberRecords.filter((record) => record.status === "APROVADO"),
+    role,
+    currentMonthString,
+  ).finalBalance;
+  return roundMoney(lifetime - current);
+}
+
 export function computeGlobalMonthStats(records: FinanceRecord[], currentMonthString: string) {
   const monthRecords = records.filter((record) => {
     return isCountableStatus(record.status) && getRecordMonthKey(record).startsWith(currentMonthString);

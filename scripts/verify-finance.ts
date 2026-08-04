@@ -7,6 +7,7 @@ import {
   computeCashbackCarryAmount,
   computeGlobalMonthStats,
   computeMemberFinance,
+  computeMissingCashbackBalance,
   getNetValue,
   getRemainingDebt,
   getSaleNetAttributedToMonth,
@@ -203,6 +204,24 @@ assert.equal(getRemainingDebt({ amount: 1000, receivedAmount: 250 }), 750);
     },
   ];
   assert.equal(computeMemberFinance(afterRollover, "Membro AFL", "2026-08").finalBalance, 70);
+}
+
+// 10) Reparo: histórico arquivado sem SALDO RETIDO deve recuperar o saldo
+{
+  const wiped = [
+    sale({ amount: 1000, receivedAmount: 1000, status: "ARQUIVADO", createdAt: "2026-06-10T12:00:00.000Z" }),
+    {
+      type: "SAQUE",
+      status: "ARQUIVADO",
+      discordId: "u1",
+      item: "PAGAMENTO REALIZADO",
+      amount: 20,
+      receivedAmount: 20,
+      createdAt: "2026-06-20T12:00:00.000Z",
+    },
+  ];
+  // 1000*6% - 20 = 40 faltando no ativo
+  assert.equal(computeMissingCashbackBalance(wiped, "Membro AFL", "2026-08"), 40);
 }
 
 console.log("OK: todos os cálculos financeiros passaram.");

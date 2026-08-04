@@ -516,6 +516,35 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
     });
   };
 
+  const executeCashbackRepair = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/admin/repair-cashback', { method: 'POST' });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Falha ao reparar cashback.');
+      }
+      const members = Number(result?.repairedMembers || 0);
+      displayToast(members > 0 ? `CASHBACK REPARADO (${members})!` : 'NADA A REPARAR');
+      await forceDataSync();
+      setConfirmationModalData(null);
+    } catch (error: any) {
+      displayToast(error?.message || 'Falha ao reparar cashback.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCashbackRepairRequest = () => {
+    setConfirmationModalData({
+      aberto: true,
+      titulo: 'REPARAR CASHBACK',
+      mensagem: 'Isso recalcula o cashback histórico e devolve, como saldo retido, o que foi zerado em viradas antigas. Pode rodar mais de uma vez com segurança. Confirmar?',
+      tipo: 'aviso',
+      acao: executeCashbackRepair
+    });
+  };
+
   const handleInstallmentPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading || !installmentModalData) return;
@@ -1117,7 +1146,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
                       <section className="surface relative overflow-hidden rounded-[var(--radius-md)] border p-6" style={{ borderColor: 'rgba(220,38,38,0.16)', boxShadow: 'var(--shadow-md)' }}>
                         <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full" style={{ background: 'rgba(220,38,38,0.06)' }} />
                         <div className="relative">
@@ -1141,6 +1170,33 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                             style={{ background: 'var(--danger)', color: 'white', opacity: isLoading ? 0.6 : 1 }}
                           >
                             Executar virada
+                          </button>
+                        </div>
+                      </section>
+
+                      <section className="surface relative overflow-hidden rounded-[var(--radius-md)] border p-6" style={{ borderColor: 'rgba(34,197,94,0.2)', boxShadow: 'var(--shadow-md)' }}>
+                        <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full" style={{ background: 'rgba(34,197,94,0.08)' }} />
+                        <div className="relative">
+                          <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl" style={{ background: 'var(--success-soft)', color: 'var(--success)' }}>
+                            <Banknote size={20} />
+                          </div>
+                          <h3 className="text-lg font-semibold">Reparar cashback</h3>
+                          <p className="mt-2 text-sm leading-6" style={{ color: 'var(--ink-soft)' }}>
+                            Devolve saldos que foram zerados em viradas antigas, com base no histórico de vendas, bônus e saques.
+                          </p>
+                          <ul className="mt-4 space-y-2 text-sm" style={{ color: 'var(--ink-soft)' }}>
+                            <li>• Usa o histórico arquivado</li>
+                            <li>• Cria SALDO RETIDO do que faltava</li>
+                            <li>• Seguro rodar mais de uma vez</li>
+                          </ul>
+                          <button
+                            type="button"
+                            onClick={handleCashbackRepairRequest}
+                            disabled={isLoading}
+                            className="mt-6 w-full rounded-2xl px-4 py-3 text-sm font-semibold"
+                            style={{ background: 'var(--success)', color: '#052814', opacity: isLoading ? 0.6 : 1 }}
+                          >
+                            Restaurar saldos zerados
                           </button>
                         </div>
                       </section>
