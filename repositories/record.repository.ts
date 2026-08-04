@@ -42,15 +42,41 @@ export class RecordRepository {
   }
 
   async archiveCurrentMonth(currentMonthPrefix: string) {
+    const start = new Date(`${currentMonthPrefix}-01T00:00:00-03:00`);
+    const [year, month] = currentMonthPrefix.split('-').map(Number);
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    const end = new Date(`${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00-03:00`);
+
     return prisma.record.updateMany({
       where: {
         status: 'APROVADO',
         createdAt: {
-          gte: new Date(`${currentMonthPrefix}-01T00:00:00.000Z`),
-          lt: new Date(`${currentMonthPrefix}-31T23:59:59.999Z`)
-        }
+          gte: start,
+          lt: end,
+        },
       },
-      data: { status: 'ARQUIVADO' }
+      data: { status: 'ARQUIVADO' },
+    });
+  }
+
+  /** Arquiva tudo aprovado antes do início do mês corrente (Brasília). */
+  async archiveBefore(monthStartUtc: Date) {
+    return prisma.record.updateMany({
+      where: {
+        status: 'APROVADO',
+        createdAt: { lt: monthStartUtc },
+      },
+      data: { status: 'ARQUIVADO' },
+    });
+  }
+
+  async countApprovedBefore(monthStartUtc: Date) {
+    return prisma.record.count({
+      where: {
+        status: 'APROVADO',
+        createdAt: { lt: monthStartUtc },
+      },
     });
   }
 

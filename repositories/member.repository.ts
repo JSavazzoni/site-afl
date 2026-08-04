@@ -53,6 +53,46 @@ export class MemberRepository {
     });
   }
 
+  async incrementExtraCashback(discordId: string, name: string, extraCashback: number) {
+    return prisma.member.upsert({
+      where: { discordId },
+      update: {
+        extraCashback: { increment: extraCashback },
+        name,
+      },
+      create: {
+        discordId,
+        name,
+        role: "Membro AFL",
+        extraCashback,
+        paidCashback: 0,
+        sales: 0,
+        receivedValue: 0,
+        recruitments: 0,
+      },
+    });
+  }
+
+  async incrementPaidCashback(discordId: string, name: string, paidCashback: number) {
+    return prisma.member.upsert({
+      where: { discordId },
+      update: {
+        paidCashback: { increment: paidCashback },
+        name,
+      },
+      create: {
+        discordId,
+        name,
+        role: "Membro AFL",
+        extraCashback: 0,
+        paidCashback,
+        sales: 0,
+        receivedValue: 0,
+        recruitments: 0,
+      },
+    });
+  }
+
   async resetAllCounters() {
     return prisma.member.updateMany({
       data: {

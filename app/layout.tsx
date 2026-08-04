@@ -1,28 +1,33 @@
-import type { Metadata } from 'next';
-import './globals.css';
+import type { Metadata } from "next";
+import { Sora } from "next/font/google";
+import "./globals.css";
 
-// 👇 AS CONFIGURAÇÕES DE VITRINE DO SITE (Links, Ícone e Textos) 👇
+const sora = Sora({
+  subsets: ["latin"],
+  variable: "--font-sora",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: 'AFL PAINEL | Gestão de Equipe',
-  description: 'Sistema corporativo exclusivo para controle de vendas, aprovações e comissões da equipe AFL.',
+  title: "AFL PAINEL | Gestão de Equipe",
+  description: "Sistema corporativo exclusivo para controle de vendas, aprovações e comissões da equipe AFL.",
   openGraph: {
-    title: 'AFL PAINEL | Central de Gestão',
-    description: 'Acesse o painel para conferir suas metas e acompanhar seus ganhos ao vivo.',
-    siteName: 'AFL PAINEL',
+    title: "AFL PAINEL | Central de Gestão",
+    description: "Acesse o painel para conferir suas metas e acompanhar seus ganhos ao vivo.",
+    siteName: "AFL PAINEL",
     images: [
       {
-        // Gera um "Card" amarelo bonitão com o nome AFL para o WhatsApp/Discord
-        url: 'https://ui-avatars.com/api/?name=AFL&background=EAB308&color=000&bold=true&size=800',
+        url: "https://ui-avatars.com/api/?name=AFL&background=C89B0C&color=111111&bold=true&size=800",
         width: 800,
         height: 800,
-        alt: 'Logo AFL PAINEL',
+        alt: "Logo AFL PAINEL",
       },
     ],
-    locale: 'pt_BR',
-    type: 'website',
+    locale: "pt_BR",
+    type: "website",
   },
   icons: {
-    icon: 'https://ui-avatars.com/api/?name=AFL&background=000&color=EAB308&bold=true&rounded=true',
+    icon: "https://ui-avatars.com/api/?name=AFL&background=12151B&color=C89B0C&bold=true&rounded=true",
   },
 };
 
@@ -33,7 +38,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className="bg-[#050505] text-white antialiased">
+      <body className={`${sora.variable} font-sans antialiased text-[var(--ink)]`}>
         {children}
       </body>
     </html>

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { RecordRepository } from '@/repositories/record.repository';
 import { MemberRepository } from '@/repositories/member.repository';
 
@@ -30,15 +31,60 @@ export class RecordService {
   }
 
   async createRecord(payload: CreateRecordDTO) {
+    const type = payload.tipo || 'VENDA';
+    const responsibleId = payload.vendedorId || payload.recrutadoId || payload.membroSaqueId || '';
+    const amount = Number(payload.valorNumerico) || 0;
+    const receivedAmount = Number(payload.recebidoNumerico);
+    const normalizedReceivedAmount = Number.isFinite(receivedAmount) ? receivedAmount : amount;
+    const extraCashback = Number(payload.cashbackExtra) || 0;
+
+    if (!responsibleId) {
+      throw new Error('Selecione um agente responsável.');
+    }
+
+    if (!['VENDA', 'CORRIDINHA', 'SAQUE', 'RECRUTAMENTO'].includes(type)) {
+      throw new Error('Tipo de registro inválido.');
+    }
+
+    if (amount <= 0 && type !== 'CORRIDINHA') {
+      throw new Error('Informe um valor válido.');
+    }
+
+    if (type === 'VENDA') {
+      if (!payload.cliente?.trim()) {
+        throw new Error('Informe o cliente da venda.');
+      }
+
+      if (!payload.item?.trim()) {
+        throw new Error('Informe o item vendido.');
+      }
+
+      if (normalizedReceivedAmount < 0 || normalizedReceivedAmount > amount) {
+        throw new Error('O valor recebido precisa estar entre zero e o valor total.');
+      }
+
+      if (normalizedReceivedAmount < amount && !payload.dataVencimento) {
+        throw new Error('Informe a data de vencimento da pendência.');
+      }
+    }
+
+    if (type === 'CORRIDINHA' && extraCashback <= 0) {
+      throw new Error('Informe um valor maior que zero.');
+    }
+
+    if (type === 'SAQUE' && amount <= 0) {
+      throw new Error('Informe um valor maior que zero.');
+    }
+
     const data = {
-      type: payload.tipo || 'VENDA',
-      discordId: payload.vendedorId || payload.recrutadoId || payload.membroSaqueId || '',
+      type,
+      discordId: responsibleId,
       name: payload.vendedorNome || payload.cliente || 'Sistema',
       client: payload.cliente || 'N/A',
       item: payload.item || 'N/A',
-      amount: Number(payload.valorNumerico) || 0,
-      receivedAmount: Number(payload.recebidoNumerico) || 0,
-      extraCashback: Number(payload.cashbackExtra) || 0,
+      amount,
+      receivedAmount: type === 'CORRIDINHA' ? 0 : normalizedReceivedAmount,
+      extraCashback,
       status: 'PENDENTE',
       dueDate: payload.dataVencimento || null,
       createdBy: payload.criadoPor || 'Sistema',
@@ -63,12 +109,17 @@ export class RecordService {
       await this.recordRepository.updateStatus(recordId, 'APROVADO', evaluatedBy);
 
       const value = Number(record.amount) || 0;
-      const received = Number(record.receivedAmount) || value;
+      const receivedRaw = Number(record.receivedAmount);
+      const received = Number.isFinite(receivedRaw) ? receivedRaw : value;
       const extra = Number(record.extraCashback) || 0;
 
       if (record.discordId) {
         if (record.type === 'VENDA' || !record.type) {
           await this.memberRepository.upsertSalesData(record.discordId, record.name, value, received, extra);
+        } else if (record.type === 'CORRIDINHA') {
+          await this.memberRepository.incrementExtraCashback(record.discordId, record.name, extra);
+        } else if (record.type === 'SAQUE') {
+          await this.memberRepository.incrementPaidCashback(record.discordId, record.name, value);
         } else if (record.type === 'RECRUTAMENTO') {
           const quantity = Number(record.quantity) || 1;
           await this.memberRepository.upsertRecruitmentData(record.discordId, record.name, quantity, extra);

@@ -6,16 +6,19 @@ export const dynamic = 'force-dynamic';
 
 const adminService = new AdminService();
 
-export async function GET() {
+export async function POST() {
   try {
     const access = await getCurrentAccess();
     if (!access.session || !access.isAdmin) {
       return NextResponse.json({ error: 'Não autorizado.' }, { status: 403 });
     }
 
-    await adminService.runSystemAudit();
-    return NextResponse.json({ success: true });
+    const result = await adminService.repairWipedCashbackBalances();
+    return NextResponse.json({ success: true, ...result });
   } catch (error: unknown) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Falha ao restaurar sistema.' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Falha ao reparar cashback.' },
+      { status: 500 },
+    );
   }
 }

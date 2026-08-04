@@ -1,35 +1,35 @@
 "use client";
-import { ShieldAlert, ArrowLeft } from "lucide-react";
+
+import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { signOut } from "next-auth/react";
+import SiteFooter from "../SiteFooter";
 
 export default function AccessDenied() {
   return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 selection:bg-red-500 font-sans relative overflow-hidden">
-      {/* Luz de fundo vermelha */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-500/5 rounded-full blur-[120px] pointer-events-none"></div>
-      
-      <div className="bg-[#0a0a0a] border border-red-500/20 p-12 rounded-[3rem] w-full max-w-md shadow-2xl relative z-10 flex flex-col items-center text-center animate-in slide-in-from-bottom-10 duration-500">
-        <div className="p-5 bg-red-500/10 text-red-500 rounded-3xl mb-8">
-          <ShieldAlert size={48} strokeWidth={2.5} />
-        </div>
-        
-        <h1 className="text-3xl font-black uppercase italic tracking-tighter text-white mb-4">
-          Acesso Negado
-        </h1>
-        <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest leading-relaxed mb-10">
-          Você não possui os cargos necessários no servidor do Discord para acessar o painel.
-        </p>
+    <div className="flex min-h-[100dvh] flex-col">
+      <div className="relative flex flex-1 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(192,53,58,0.12),transparent_34%),linear-gradient(180deg,#f7f8fa_0%,#eef1f5_100%)]" />
 
-        <div className="w-full space-y-4">
-          <button 
-            onClick={() => signOut({ callbackUrl: '/login' })}
-            className="w-full flex items-center justify-center gap-3 bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] transition-all shadow-[0_10px_20px_rgba(220,38,38,0.2)] active:scale-95"
-          >
-            <ArrowLeft size={16} />
-            Voltar e Tentar Novamente
-          </button>
+        <div className="relative z-10 mx-auto flex w-full max-w-lg flex-1 items-center px-6 py-12">
+          <div className="fade-up surface w-full rounded-[28px] p-8 text-center sm:p-10">
+            <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--danger-soft)] text-[var(--danger)]">
+              <ShieldAlert size={28} />
+            </div>
+            <h1 className="text-3xl font-semibold tracking-tight text-[var(--ink)]">Acesso negado</h1>
+            <p className="mt-3 text-sm leading-6 text-[var(--ink-soft)]">
+              Sua conta Discord não possui os cargos necessários para entrar no AFL Painel.
+            </p>
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--ink)] px-5 py-4 text-sm font-semibold text-white transition hover:bg-black active:scale-[0.99]"
+            >
+              <ArrowLeft size={16} />
+              Voltar ao login
+            </button>
+          </div>
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }
