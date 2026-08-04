@@ -482,7 +482,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
     setConfirmationModalData({
       aberto: true,
       titulo: 'VIRADA DE MÊS',
-      mensagem: 'ALERTA: isso arquiva o mês anterior (Brasília) e recalcula os contadores da equipe. Confirmar virada manual?',
+      mensagem: 'ALERTA: arquiva o mês anterior (Brasília), recalcula contadores e mantém o cashback disponível como saldo retido até ser sacado. Confirmar virada?',
       tipo: 'perigo',
       acao: executeMonthRollover
     });
@@ -1126,12 +1126,12 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                           </div>
                           <h3 className="text-lg font-semibold">Virada de mês</h3>
                           <p className="mt-2 text-sm leading-6" style={{ color: 'var(--ink-soft)' }}>
-                            Arquiva as vendas do mês anterior (horário de Brasília) e recalcula os contadores. Use somente no dia 1º.
+                            Arquiva as vendas do mês anterior (Brasília) e recalcula os contadores. O cashback disponível não é zerado — vira saldo retido até o saque.
                           </p>
                           <ul className="mt-4 space-y-2 text-sm" style={{ color: 'var(--ink-soft)' }}>
                             <li>• Execução apenas manual</li>
-                            <li>• Registros aprovados do mês anterior vão ao histórico</li>
-                            <li>• Contadores são recalculados com o mês vigente</li>
+                            <li>• Cashback não sacado permanece disponível</li>
+                            <li>• Registros do mês anterior vão ao histórico</li>
                           </ul>
                           <button
                             type="button"

@@ -261,6 +261,33 @@ export function computeMemberFinance(
   };
 }
 
+/**
+ * Quanto do saldo disponível seria perdido ao arquivar registros anteriores ao mês.
+ * Esse valor deve virar SALDO RETIDO (positivo) ou DÍVIDA RETIDA (negativo).
+ */
+export function computeCashbackCarryAmount(
+  memberRecords: FinanceRecord[],
+  role: string,
+  monthStartUtc: Date,
+  currentMonthString: string,
+) {
+  const approved = memberRecords.filter((record) => record.status === "APROVADO");
+  if (approved.length === 0) return 0;
+
+  const totalBalance = computeMemberFinance(approved, role, currentMonthString).finalBalance;
+
+  const keeping = approved.filter((record) => {
+    const raw = record.createdAt || record.criado_em;
+    if (!raw) return false;
+    const created = raw instanceof Date ? raw : new Date(raw);
+    if (Number.isNaN(created.getTime())) return false;
+    return created >= monthStartUtc;
+  });
+
+  const keepingBalance = computeMemberFinance(keeping, role, currentMonthString).finalBalance;
+  return roundMoney(totalBalance - keepingBalance);
+}
+
 export function computeGlobalMonthStats(records: FinanceRecord[], currentMonthString: string) {
   const monthRecords = records.filter((record) => {
     return isCountableStatus(record.status) && getRecordMonthKey(record).startsWith(currentMonthString);

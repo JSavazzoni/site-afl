@@ -1,7 +1,7 @@
 import { RecordRepository } from '@/repositories/record.repository';
 import { MemberRepository } from '@/repositories/member.repository';
 import { getBrasiliaMonthKey, getBrasiliaMonthStartUtc } from '@/lib/brasilia';
-import { isInstallmentPayment } from '@/lib/finance';
+import { computeCashbackCarryAmount, isInstallmentPayment, roundMoney } from '@/lib/finance';
 import { prisma } from '@/lib/prisma';
 
 export class AdminService {
@@ -19,21 +19,91 @@ export class AdminService {
   }
 
   /**
-   * Fecha o mês anterior (Brasília): arquiva APROVADO com createdAt < início do mês atual
-   * e recalcula contadores a partir dos registros ainda ativos.
-   * Idempotente — pode rodar várias vezes no mesmo mês.
+   * Fecha o mês anterior (Brasília):
+   * 1) preserva saldo de cashback não sacado como SALDO RETIDO / DÍVIDA RETIDA
+   * 2) arquiva APROVADO anteriores ao mês atual
+   * 3) recalcula contadores a partir do que continua ativo
    */
   async executeMonthRollover(now: Date = new Date()) {
     const monthKey = getBrasiliaMonthKey(now);
     const monthStartUtc = getBrasiliaMonthStartUtc(now);
 
+    const members = await this.memberRepository.findAll();
+    const approvedRecords = await prisma.record.findMany({
+      where: { status: 'APROVADO' },
+    });
+
+    const carryForwards: Array<{
+      discordId: string;
+      name: string;
+      type: 'CORRIDINHA' | 'SAQUE';
+      item: string;
+      amount: number;
+      receivedAmount: number;
+      extraCashback: number;
+    }> = [];
+
+    for (const member of members) {
+      if (!member.discordId) continue;
+
+      const memberRecords = approvedRecords.filter(
+        (record) => String(record.discordId) === String(member.discordId),
+      );
+      if (memberRecords.length === 0) continue;
+
+      const role = member.panelRole || member.role || 'Membro AFL';
+      const carry = computeCashbackCarryAmount(memberRecords, role, monthStartUtc, monthKey);
+
+      if (carry > 0.01) {
+        carryForwards.push({
+          discordId: member.discordId,
+          name: member.name,
+          type: 'CORRIDINHA',
+          item: 'SALDO RETIDO (MÊS ANTERIOR)',
+          amount: 0,
+          receivedAmount: 0,
+          extraCashback: roundMoney(carry),
+        });
+      } else if (carry < -0.01) {
+        carryForwards.push({
+          discordId: member.discordId,
+          name: member.name,
+          type: 'SAQUE',
+          item: 'DÍVIDA RETIDA (MÊS ANTERIOR)',
+          amount: roundMoney(Math.abs(carry)),
+          receivedAmount: 0,
+          extraCashback: 0,
+        });
+      }
+    }
+
     const archived = await this.recordRepository.archiveBefore(monthStartUtc);
+
+    for (const carry of carryForwards) {
+      await prisma.record.create({
+        data: {
+          discordId: carry.discordId,
+          name: carry.name,
+          type: carry.type,
+          item: carry.item,
+          client: 'SISTEMA AFL',
+          amount: carry.amount,
+          receivedAmount: carry.receivedAmount,
+          extraCashback: carry.extraCashback,
+          status: 'APROVADO',
+          createdBy: 'Sistema',
+          evaluatedBy: 'Virada de mês',
+        },
+      });
+    }
+
     await this.rebuildMemberCountersFromApproved();
 
     return {
       monthKey,
       monthStartUtc: monthStartUtc.toISOString(),
       archivedCount: archived.count,
+      carryForwardCount: carryForwards.length,
     };
   }
 
@@ -77,7 +147,6 @@ export class AdminService {
       if (type === 'VENDA' || !record.type) {
         if (isInstallmentPayment(record.item)) {
           // Parcela já está refletida no receivedAmount da venda pai.
-          // Não soma de novo nos contadores.
         } else {
           current.sales += amount;
           current.receivedValue += received;

@@ -4,6 +4,7 @@
  */
 import assert from "node:assert/strict";
 import {
+  computeCashbackCarryAmount,
   computeGlobalMonthStats,
   computeMemberFinance,
   getNetValue,
@@ -157,6 +158,51 @@ assert.equal(getRemainingDebt({ amount: 1000, receivedAmount: 250 }), 750);
   const stats = computeGlobalMonthStats(records, "2026-07");
   assert.equal(stats.gross, 500);
   assert.equal(stats.net, 500);
+}
+
+// 9) Virada: cashback não sacado deve virar saldo retido (não zerar)
+{
+  const monthStart = new Date("2026-08-01T03:00:00.000Z"); // 00:00 BRT
+  const records = [
+    sale({ amount: 1000, receivedAmount: 1000, createdAt: "2026-07-10T12:00:00.000Z" }),
+    {
+      type: "CORRIDINHA",
+      status: "APROVADO",
+      discordId: "u1",
+      item: "BÔNUS",
+      amount: 0,
+      receivedAmount: 0,
+      extraCashback: 20,
+      createdAt: "2026-07-12T12:00:00.000Z",
+    },
+    {
+      type: "SAQUE",
+      status: "APROVADO",
+      discordId: "u1",
+      item: "PAGAMENTO REALIZADO",
+      amount: 10,
+      receivedAmount: 10,
+      createdAt: "2026-07-15T12:00:00.000Z",
+    },
+  ];
+  // 1000*6% + 20 - 10 = 70
+  const carry = computeCashbackCarryAmount(records, "Membro AFL", monthStart, "2026-08");
+  assert.equal(carry, 70);
+
+  // Depois da virada, o SALDO RETIDO mantém o saldo disponível
+  const afterRollover = [
+    {
+      type: "CORRIDINHA",
+      status: "APROVADO",
+      discordId: "u1",
+      item: "SALDO RETIDO (MÊS ANTERIOR)",
+      amount: 0,
+      receivedAmount: 0,
+      extraCashback: 70,
+      createdAt: "2026-08-01T03:00:00.000Z",
+    },
+  ];
+  assert.equal(computeMemberFinance(afterRollover, "Membro AFL", "2026-08").finalBalance, 70);
 }
 
 console.log("OK: todos os cálculos financeiros passaram.");
