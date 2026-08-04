@@ -482,7 +482,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
     setConfirmationModalData({
       aberto: true,
       titulo: 'VIRADA DE MÊS',
-      mensagem: 'Isso arquiva o mês anterior (Brasília) e recalcula os contadores. Em condições normais a virada já roda sozinha no dia 1º. Confirmar execução manual?',
+      mensagem: 'ALERTA: isso arquiva o mês anterior (Brasília) e recalcula os contadores da equipe. Confirmar virada manual?',
       tipo: 'perigo',
       acao: executeMonthRollover
     });
@@ -1126,10 +1126,10 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                           </div>
                           <h3 className="text-lg font-semibold">Virada de mês</h3>
                           <p className="mt-2 text-sm leading-6" style={{ color: 'var(--ink-soft)' }}>
-                            Automática todo dia 1º à 00:00 (horário de Brasília). Arquiva o mês anterior e recalcula os contadores. O botão abaixo é só reserva manual.
+                            Arquiva as vendas do mês anterior (horário de Brasília) e recalcula os contadores. Use somente no dia 1º.
                           </p>
                           <ul className="mt-4 space-y-2 text-sm" style={{ color: 'var(--ink-soft)' }}>
-                            <li>• Roda sozinha no dia 1º (Brasília)</li>
+                            <li>• Execução apenas manual</li>
                             <li>• Registros aprovados do mês anterior vão ao histórico</li>
                             <li>• Contadores são recalculados com o mês vigente</li>
                           </ul>
@@ -1140,7 +1140,7 @@ export default function Dashboard({ initialPermissions, userSession }: any) {
                             className="mt-6 w-full rounded-2xl px-4 py-3 text-sm font-semibold"
                             style={{ background: 'var(--danger)', color: 'white', opacity: isLoading ? 0.6 : 1 }}
                           >
-                            Executar agora (manual)
+                            Executar virada
                           </button>
                         </div>
                       </section>

@@ -1,11 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentAccess } from "@/lib/auth";
-import { AdminService } from "@/services/admin.service";
 import Dashboard from "./Dashboard";
 
 export const dynamic = 'force-dynamic';
-
-const adminService = new AdminService();
 
 export default async function HomePage() {
   const access = await getCurrentAccess();
@@ -17,13 +14,6 @@ export default async function HomePage() {
 
   if (!access.isPanelMember) {
     redirect("/access-denied");
-  }
-
-  // Virada automática (Brasília): se ainda houver mês anterior aprovado, fecha ao abrir o painel.
-  try {
-    await adminService.ensureAutomaticMonthRollover();
-  } catch (error) {
-    console.error("Falha na virada automática de mês:", error);
   }
 
   return (

@@ -5,7 +5,7 @@ import { getToken } from 'next-auth/jwt';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith('/api/planilha') || pathname.startsWith('/api/cron/')) {
+  if (pathname.startsWith('/api/planilha')) {
     return NextResponse.next();
   }
 

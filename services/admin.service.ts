@@ -37,30 +37,6 @@ export class AdminService {
     };
   }
 
-  /**
-   * Garante a virada automática: se ainda existir venda aprovada de mês anterior
-   * (em Brasília), executa o rollover. Seguro em qualquer dia (catch-up).
-   */
-  async ensureAutomaticMonthRollover(now: Date = new Date()) {
-    const monthStartUtc = getBrasiliaMonthStartUtc(now);
-    const pending = await this.recordRepository.countApprovedBefore(monthStartUtc);
-
-    if (pending === 0) {
-      return {
-        ran: false,
-        monthKey: getBrasiliaMonthKey(now),
-        pending: 0,
-      };
-    }
-
-    const result = await this.executeMonthRollover(now);
-    return {
-      ran: true,
-      pending,
-      ...result,
-    };
-  }
-
   async rebuildMemberCountersFromApproved() {
     await this.memberRepository.resetAllCounters();
 

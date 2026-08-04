@@ -2,24 +2,16 @@
 import { NextResponse } from 'next/server';
 import { getCurrentAccess } from '@/lib/auth';
 import { RecordService } from '@/services/record.service';
-import { AdminService } from '@/services/admin.service';
 
 export const dynamic = 'force-dynamic';
 
 const recordService = new RecordService();
-const adminService = new AdminService();
 
 export async function GET() {
   try {
     const access = await getCurrentAccess();
     if (!access.session || !access.isPanelMember) {
       return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
-    }
-
-    try {
-      await adminService.ensureAutomaticMonthRollover();
-    } catch (error) {
-      console.error('Falha na virada automática de mês:', error);
     }
 
     const records = await recordService.getActiveRecords();

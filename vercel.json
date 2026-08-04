@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/month-rollover",
-      "schedule": "0 3 * * *"
-    }
-  ]
-}
